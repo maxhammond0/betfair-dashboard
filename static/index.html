@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Betfair Bets</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series: #2a78d6; --pos: #2a78d6; --neg: #e34948;
+  --good-text: #006300; --bad-text: #d03b3b; --warn: #fab219;
+  --hover: rgba(11,11,11,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series: #3987e5; --pos: #3987e5; --neg: #e66767;
+    --good-text: #0ca30c; --bad-text: #e66767;
+    --hover: rgba(255,255,255,0.05);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --series: #3987e5; --pos: #3987e5; --neg: #e66767;
+  --good-text: #0ca30c; --bad-text: #e66767;
+  --hover: rgba(255,255,255,0.05);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.meta { color: var(--ink-2); font-size: 13px; }
+.status { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status.ok .dot { background: #0ca30c; }
+.status.error .dot { background: #d03b3b; }
+.spacer { flex: 1; }
+button.theme { background: none; border: 1px solid var(--border); color: var(--ink-2);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.tile { padding: 12px 14px; }
+.tile .label { color: var(--ink-2); font-size: 12px; }
+.tile .value { font-size: 24px; font-weight: 600; margin-top: 2px; }
+.tile .sub { color: var(--muted); font-size: 12px; }
+.card { padding: 14px; margin-bottom: 16px; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+.charts .card { margin-bottom: 0; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-variant-numeric: tabular-nums; }
+.section-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.section-row h2 { margin: 0; }
+input[type=search], select { background: var(--page); color: var(--ink); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
+.table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; z-index: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--hover); }
+.pos { color: var(--good-text); }
+.neg { color: var(--bad-text); }
+.pill { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); }
+.pill.BACK { color: var(--pos); } .pill.LAY { color: var(--neg); }
+.empty { color: var(--muted); padding: 12px 0; }
+.err { color: var(--bad-text); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Betfair Bets</h1>
+    <span class="status meta" id="status"><span class="dot"></span><span id="status-text">Loading…</span></span>
+    <span class="spacer"></span>
+    <button class="theme" id="theme" title="Toggle light/dark">Theme</button>
+  </header>
+  <div class="err" id="error"></div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="charts">
+    <div class="card"><h2>Cumulative net P&amp;L</h2><div class="chart" id="cum-chart"></div></div>
+    <div class="card"><h2>Daily net P&amp;L</h2><div class="chart" id="daily-chart"></div></div>
+  </section>
+  <div style="height:16px"></div>
+
+  <section class="card">
+    <div class="section-row"><h2>Open orders</h2><span class="meta" id="open-count"></span></div>
+    <div class="table-wrap" id="open-table"></div>
+  </section>
+
+  <section class="card">
+    <div class="section-row"><h2>By strategy</h2><span class="meta">gross, before commission</span></div>
+    <div class="table-wrap" id="strategy-table"></div>
+  </section>
+
+  <section class="card">
+    <div class="section-row">
+      <h2>Settled bets</h2>
+      <input type="search" id="search" placeholder="Filter runner, event, strategy…">
+      <select id="side-filter"><option value="">All sides</option><option>BACK</option><option>LAY</option></select>
+      <span class="meta" id="settled-count"></span>
+    </div>
+    <div class="table-wrap" id="settled-table"></div>
+  </section>
+</main>
+<script>
+const REFRESH_MS = 15000;
+let DATA = null;
+
+// ---------- theme toggle (per-viewer convenience only) ----------
+const root = document.documentElement;
+try { const t = localStorage.getItem('theme'); if (t) root.dataset.theme = t; } catch (e) {}
+document.getElementById('theme').onclick = () => {
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+  try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+  if (DATA) renderCharts(DATA);
+};
+
+// ---------- formatting ----------
+const money = v => v == null ? '–' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const signed = v => v == null ? '–' : (v > 0 ? '+' : '') + money(v);
+const pnlCls = v => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
+const num = (v, d = 2) => v == null ? '–' : Number(v).toFixed(d);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const time = iso => iso ? new Date(iso).toLocaleString(undefined, {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}) : '–';
+const shortDate = d => new Date(d + 'T00:00:00').toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
+
+// ---------- tiles ----------
+function renderTiles(d) {
+  const f = d.funds || {};
+  const daily = d.daily || [];
+  const today = new Date().toLocaleDateString('en-CA', {timeZone: 'Australia/Sydney'});
+  const t = daily.find(x => x.date === today);
+  const total = daily.reduce((a, x) => a + x.net, 0);
+  const comm = daily.reduce((a, x) => a + x.commission, 0);
+  const bets = d.bets || [];
+  const won = bets.filter(b => b.outcome === 'WON').length;
+  const open = d.current || [];
+  const unmatched = open.filter(o => o.remaining > 0).length;
+  const tiles = [
+    ['Available to bet', money(f.available), ''],
+    ['Exposure', money(f.exposure), f.exposure_limit != null ? 'limit ' + money(f.exposure_limit) : ''],
+    ['Open orders', open.length, unmatched + ' with unmatched stake'],
+    ['Today net P&L', signed(t ? t.net : 0), t ? t.markets + ' markets settled' : 'nothing settled yet', t ? t.net : 0],
+    [`Net P&L, ${d.history_days} days`, signed(total), 'commission ' + money(comm), total],
+    ['Strike rate', bets.length ? (100 * won / bets.length).toFixed(1) + '%' : '–', bets.length + ' settled bets'],
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(([l, v, s, p]) =>
+    `<div class="tile"><div class="label">${l}</div><div class="value ${p != null ? pnlCls(p) : ''}">${v}</div><div class="sub">${s}</div></div>`).join('');
+}
+
+// ---------- charts (inline SVG) ----------
+const css = n => getComputedStyle(root).getPropertyValue(n).trim();
+
+function niceTicks(lo, hi, n = 4) {
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
+  const ticks = [];
+  for (let v = Math.floor(lo / step) * step; v <= hi + step * 0.5; v += step) ticks.push(+v.toFixed(10));
+  return ticks;
+}
+
+function frame(el, days, values) {
+  const W = el.clientWidth || 500, H = 220, m = {t: 10, r: 8, b: 24, l: 56};
+  const ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values));
+  const y0 = ticks[0], y1 = ticks[ticks.length - 1];
+  const y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+  let g = '';
+  for (const t of ticks) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? css('--axis') : css('--grid')}" stroke-width="1"/>`;
+    g += `<text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${money(t).replace('.00', '')}</text>`;
+  }
+  return {W, H, m, y, g};
+}
+
+function xLabels(days, x, H, m) {
+  if (!days.length) return '';
+  const idx = [...new Set([0, Math.floor((days.length - 1) / 2), days.length - 1])];
+  return idx.map((i, k) => `<text x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 && idx.length > 1 ? 'start' : k === idx.length - 1 && idx.length > 1 ? 'end' : 'middle'}">${shortDate(days[i].date)}</text>`).join('');
+}
+
+function attachHover(el, n, xOf, html, onMove) {
+  const tip = el.querySelector('.tip'), svg = el.querySelector('svg');
+  svg.onmousemove = e => {
+    const r = svg.getBoundingClientRect(), px = e.clientX - r.left;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < n; i++) { const dd = Math.abs(xOf(i) - px); if (dd < bd) { bd = dd; best = i; } }
+    tip.innerHTML = html(best); tip.style.display = 'block';
+    const left = Math.min(Math.max(xOf(best) + 12, 0), r.width - tip.offsetWidth);
+    tip.style.left = (xOf(best) + 12 + tip.offsetWidth > r.width ? xOf(best) - tip.offsetWidth - 12 : left) + 'px';
+    tip.style.top = '8px';
+    onMove && onMove(best);
+  };
+  svg.onmouseleave = () => { tip.style.display = 'none'; onMove && onMove(null); };
+}
+
+function tipHtml(day) {
+  return `<div>${shortDate(day.date)}</div>
+    <div>Net <b class="${pnlCls(day.net)}">${signed(day.net)}</b></div>
+    <div style="color:var(--ink-2)">Gross ${signed(day.gross)} · comm ${money(day.commission)} · ${day.markets} mkts</div>`;
+}
+
+function renderCharts(d) {
+  const days = d.daily || [];
+  const cumEl = document.getElementById('cum-chart'), dayEl = document.getElementById('daily-chart');
+  if (!days.length) {
+    cumEl.innerHTML = dayEl.innerHTML = '<div class="empty">No settled markets in this period.</div>';
+    return;
+  }
+  // cumulative line
+  let run = 0;
+  const cum = days.map(x => (run += x.net));
+  {
+    const {W, H, m, y, g} = frame(cumEl, days, cum);
+    const x = i => days.length === 1 ? (m.l + W - m.r) / 2 : m.l + (W - m.l - m.r) * i / (days.length - 1);
+    const path = cum.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('');
+    const last = cum.length - 1;
+    cumEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative net profit and loss by day">
+      ${g}<path d="${path}" fill="none" stroke="${css('--series')}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line id="cross" y1="${m.t}" y2="${H - m.b}" stroke="${css('--axis')}" stroke-width="1" visibility="hidden"/>
+      <circle id="cdot" r="4" fill="${css('--series')}" stroke="${css('--surface')}" stroke-width="2" visibility="hidden"/>
+      <circle cx="${x(last)}" cy="${y(cum[last])}" r="4" fill="${css('--series')}" stroke="${css('--surface')}" stroke-width="2"/>
+      ${xLabels(days, x, H, m)}
+      <rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>
+    </svg><div class="tip"></div>`;
+    const cross = cumEl.querySelector('#cross'), dot = cumEl.querySelector('#cdot');
+    attachHover(cumEl, days.length, x,
+      i => `${tipHtml(days[i])}<div>Cumulative <b class="${pnlCls(cum[i])}">${signed(cum[i])}</b></div>`,
+      i => {
+        const vis = i == null ? 'hidden' : 'visible';
+        cross.setAttribute('visibility', vis); dot.setAttribute('visibility', vis);
+        if (i != null) { cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(cum[i])); }
+      });
+  }
+  // daily bars, diverging around zero
+  {
+    const vals = days.map(x => x.net);
+    const {W, H, m, y, g} = frame(dayEl, days, vals);
+    const band = (W - m.l - m.r) / days.length, bw = Math.max(2, Math.min(24, band - 2));
+    const x = i => m.l + band * (i + 0.5);
+    const bars = vals.map((v, i) => {
+      const top = Math.min(y(v), y(0)), h = Math.max(1, Math.abs(y(v) - y(0))), r = Math.min(4, bw / 2, h);
+      // rounded at the data end only, square at the zero baseline
+      const x0 = x(i) - bw / 2, x1 = x0 + bw;
+      const d = v >= 0
+        ? `M${x0},${top + h}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x1 - r}Q${x1},${top} ${x1},${top + r}V${top + h}Z`
+        : `M${x0},${top}V${top + h - r}Q${x0},${top + h} ${x0 + r},${top + h}H${x1 - r}Q${x1},${top + h} ${x1},${top + h - r}V${top}Z`;
+      return `<path class="bar" d="${d}" fill="${v >= 0 ? css('--pos') : css('--neg')}"/>`;
+    }).join('');
+    dayEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily net profit and loss">
+      ${g}${bars}${xLabels(days, x, H, m)}
+      <rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>
+    </svg><div class="tip"></div>`;
+    const barEls = dayEl.querySelectorAll('.bar');
+    attachHover(dayEl, days.length, x, i => tipHtml(days[i]),
+      i => barEls.forEach((b, k) => b.style.opacity = i == null || k === i ? 1 : 0.45));
+  }
+}
+
+// ---------- tables ----------
+function table(cols, rows, empty) {
+  if (!rows.length) return `<div class="empty">${empty}</div>`;
+  return `<table><thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}">${c.h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.num ? 'num ' : ''}${c.cls ? c.cls(r) : ''}">${c.f(r)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+const side = r => `<span class="pill ${r.side}">${r.side}</span>`;
+
+function renderOpen(d) {
+  const rows = d.current || [];
+  document.getElementById('open-count').textContent = rows.length ? rows.length + ' orders' : '';
+  document.getElementById('open-table').innerHTML = table([
+    {h: 'Start', f: r => time(r.start)},
+    {h: 'Event', f: r => esc(r.event)},
+    {h: 'Market', f: r => esc(r.market)},
+    {h: 'Runner', f: r => esc(r.runner)},
+    {h: 'Side', f: side},
+    {h: 'Type', f: r => esc(r.order_type) + (r.order_type === 'LIMIT' ? ' · ' + esc(r.persistence) : '')},
+    {h: 'Price', num: 1, f: r => r.order_type === 'MARKET_ON_CLOSE' ? 'BSP' : num(r.price)},
+    {h: 'Stake / liab.', num: 1, f: r => r.order_type === 'MARKET_ON_CLOSE' ? money(r.bsp_liability) : money(r.size)},
+    {h: 'Matched', num: 1, f: r => money(r.matched) + (r.avg_matched ? ' @ ' + num(r.avg_matched) : '')},
+    {h: 'Unmatched', num: 1, f: r => money(r.remaining)},
+    {h: 'Strategy', f: r => esc(r.strategy)},
+  ], rows, 'No open orders.');
+}
+
+function renderStrategies(d) {
+  const rows = d.strategies || [];
+  document.getElementById('strategy-table').innerHTML = table([
+    {h: 'Strategy', f: r => esc(r.strategy)},
+    {h: 'Bets', num: 1, f: r => r.bets},
+    {h: 'Won', num: 1, f: r => r.won},
+    {h: 'Strike', num: 1, f: r => (100 * r.won / r.bets).toFixed(1) + '%'},
+    {h: 'Staked', num: 1, f: r => money(r.staked)},
+    {h: 'Profit', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
+    {h: 'POT', num: 1, f: r => r.staked ? (100 * r.profit / r.staked).toFixed(1) + '%' : '–', cls: r => pnlCls(r.profit)},
+  ], rows, 'No settled bets in this period.');
+}
+
+function renderSettled(d) {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const s = document.getElementById('side-filter').value;
+  const all = d.bets || [];
+  const rows = all.filter(r => (!s || r.side === s) &&
+    (!q || [r.runner, r.event, r.market, r.strategy].some(v => String(v ?? '').toLowerCase().includes(q))));
+  const shown = rows.slice(0, 500);
+  const pnl = rows.reduce((a, r) => a + (r.profit || 0), 0);
+  document.getElementById('settled-count').innerHTML =
+    `${rows.length} bets · <span class="${pnlCls(pnl)}">${signed(pnl)}</span> gross${rows.length > 500 ? ' · showing latest 500' : ''}`;
+  document.getElementById('settled-table').innerHTML = table([
+    {h: 'Settled', f: r => time(r.settled)},
+    {h: 'Event', f: r => esc(r.event)},
+    {h: 'Market', f: r => esc(r.market)},
+    {h: 'Runner', f: r => esc(r.runner)},
+    {h: 'Side', f: side},
+    {h: 'Type', f: r => esc(r.order_type)},
+    {h: 'Price', num: 1, f: r => num(r.price)},
+    {h: 'Stake', num: 1, f: r => money(r.size)},
+    {h: 'Result', f: r => esc(r.outcome)},
+    {h: 'Profit', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
+    {h: 'Strategy', f: r => esc(r.strategy)},
+  ], shown, 'No settled bets match.');
+}
+document.getElementById('search').oninput = () => DATA && renderSettled(DATA);
+document.getElementById('side-filter').onchange = () => DATA && renderSettled(DATA);
+
+// ---------- polling ----------
+async function load() {
+  const st = document.getElementById('status'), stText = document.getElementById('status-text');
+  try {
+    const res = await fetch('api/data', {cache: 'no-store'});
+    const d = await res.json();
+    st.className = 'status meta ' + d.status;
+    if (d.status === 'starting') { stText.textContent = 'Connecting to Betfair…'; return; }
+    stText.textContent = (d.status === 'ok' ? 'Live' : 'Stale') +
+      (d.updated ? ' · updated ' + new Date(d.updated).toLocaleTimeString() : '');
+    document.getElementById('error').textContent = d.status === 'error' ? 'Last refresh failed: ' + d.error : '';
+    if (!d.funds) return;
+    DATA = d;
+    renderTiles(d); renderCharts(d); renderOpen(d); renderStrategies(d); renderSettled(d);
+  } catch (e) {
+    st.className = 'status meta error'; stText.textContent = 'Dashboard server unreachable';
+  }
+}
+let resizeT;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => DATA && renderCharts(DATA), 150); });
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
