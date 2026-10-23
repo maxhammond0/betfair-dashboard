@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Betfair Bets</title>
+<title>Betfair Dashboard</title>
 <style>
 :root {
   color-scheme: light;
@@ -49,6 +49,12 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .spacer { flex: 1; }
 button.theme { background: none; border: 1px solid var(--border); color: var(--ink-2);
   border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.range button { background: none; border: 0; border-left: 1px solid var(--border); color: var(--ink-2);
+  padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.range button:first-child { border-left: 0; }
+.range button:hover { background: var(--hover); }
+.range button[aria-pressed="true"] { background: var(--series); color: #fff; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .tile { padding: 12px 14px; }
@@ -88,9 +94,12 @@ tbody tr:hover { background: var(--hover); }
 <body>
 <main>
   <header>
-    <h1>Betfair Bets</h1>
+    <h1>Betfair Result Dashboard</h1>
     <span class="status meta" id="status"><span class="dot"></span><span id="status-text">Loading…</span></span>
     <span class="spacer"></span>
+    <div class="range" id="range" role="group" aria-label="Settled history range">
+      <button data-days="1">Today</button><button data-days="7">7d</button><button data-days="30">30d</button><button data-days="60">60d</button><button data-days="90">90d</button><button data-days="0" title="Everything stored, including bets older than Betfair's 90 days">All</button>
+    </div>
     <button class="theme" id="theme" title="Toggle light/dark">Theme</button>
   </header>
   <div class="err" id="error"></div>
@@ -109,7 +118,7 @@ tbody tr:hover { background: var(--hover); }
   </section>
 
   <section class="card">
-    <div class="section-row"><h2>By strategy</h2><span class="meta">before commission, which Betfair charges per market</span></div>
+    <div class="section-row"><h2>By strategy</h2><span class="meta">each market’s commission is split between the strategies that won in it</span></div>
     <div class="table-wrap" id="strategy-table"></div>
   </section>
 
@@ -131,7 +140,20 @@ tbody tr:hover { background: var(--hover); }
 </main>
 <script>
 const REFRESH_MS = 15000;
+const STARTING_MS = 1000;   // re-check quickly until the server has reached Betfair
 let DATA = null;
+
+// ---------- history range (remembered per browser) ----------
+let RANGE = 60;
+try { const r = localStorage.getItem('range'); if (r != null && !isNaN(+r)) RANGE = +r; } catch (e) {}
+const rangeBtns = document.querySelectorAll('#range button');
+const markRange = () => rangeBtns.forEach(b => b.setAttribute('aria-pressed', +b.dataset.days === RANGE));
+rangeBtns.forEach(b => b.onclick = () => {
+  RANGE = +b.dataset.days; markRange();
+  try { localStorage.setItem('range', RANGE); } catch (e) {}
+  load();
+});
+markRange();
 
 // ---------- theme toggle (per-viewer convenience only) ----------
 const root = document.documentElement;
@@ -152,6 +174,15 @@ const num = (v, d = 2) => v == null ? '–' : Number(v).toFixed(d);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const time = iso => iso ? new Date(iso).toLocaleString(undefined, {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'}) : '–';
 const pct = v => v == null ? '–' : (100 * v).toFixed(2) + '%';
+// commission generated minus the 1.25% of NSW back turnover it must reach to avoid the charge
+const NSW_GENERATED_MIN = 0.0125;
+const nswGap = w => w.turnover ? w.generated - NSW_GENERATED_MIN * w.turnover : null;
+const gapText = w => {
+  const g = nswGap(w);
+  if (g == null) return '–';
+  const pts = (100 * (w.generated_pct - NSW_GENERATED_MIN)).toFixed(2);
+  return `${g >= 0 ? '+' + pts : '−' + pts.replace('-', '')} pts · ${money(Math.abs(g))} ${g >= 0 ? 'clear' : 'short'}`;
+};
 const shortDate = d => new Date(d + 'T00:00:00').toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
 
 // ---------- tiles ----------
@@ -166,19 +197,23 @@ function renderTiles(d) {
   const wk = ((d.nsw || {}).weeks || []).find(w => w.in_progress);
   const open = d.current || [];
   const unmatched = open.filter(o => o.remaining > 0).length;
+  const tr = d.transfers || {};
   const tiles = [
     ['Available to bet', money(f.available), ''],
     ['Exposure', money(f.exposure), f.exposure_limit != null ? 'limit ' + money(f.exposure_limit) : ''],
-    ['Open orders', open.length, unmatched + ' with unmatched stake'],
+    ['Open orders', d.current ? open.length : '–', d.current ? unmatched + ' with unmatched stake' : ''],
     ['Today net P&L', signed(t ? t.net : 0), t ? t.markets + ' markets settled' : 'nothing settled yet', t ? t.net : 0],
-    [d.since ? `Net P&L since ${shortDate(d.since)}` : 'Net P&L', signed(total), `commission ${money(comm)} · NSW est. ${money(nswTotal)}`, total],
+    [d.range_days === 1 ? 'Net P&L today' : d.since ? `Net P&L since ${shortDate(d.since)}` : 'Net P&L', signed(total), `commission ${money(comm)} · NSW est. ${money(nswTotal)}`, total],
     ['NSW charge this week', wk ? money(wk.charge) : money(0),
       !wk ? 'no NSW back bets yet' : wk.turnover < 1000 ? `turnover ${money(wk.turnover)}, under $1,000`
-        : `generated ${pct(wk.generated_pct)} of turnover (needs 1.25%)`],
+        : `generated ${pct(wk.generated_pct)} of turnover · ${money(Math.abs(nswGap(wk)))} ${nswGap(wk) >= 0 ? 'clear of' : 'short of'} 1.25%`],
+    ['Withdrawals', money(tr.withdrawals ?? 0),
+      `deposits ${money(tr.deposits ?? 0)}` + (tr.items && tr.items.length ? ` · ${tr.items.length} transfer${tr.items.length > 1 ? 's' : ''}` : ''),
+      null, (tr.items || []).map(t => `${shortDate(t.date.slice(0, 10))}  ${signed(t.amount)}  ${t.description || ''}`).join('\n')],
     ['Strike rate', d.bet_count ? (100 * d.won_count / d.bet_count).toFixed(1) + '%' : '–', (d.bet_count || 0) + ' settled bets'],
   ];
-  document.getElementById('tiles').innerHTML = tiles.map(([l, v, s, p]) =>
-    `<div class="tile"><div class="label">${l}</div><div class="value ${p != null ? pnlCls(p) : ''}">${v}</div><div class="sub">${s}</div></div>`).join('');
+  document.getElementById('tiles').innerHTML = tiles.map(([l, v, s, p, title]) =>
+    `<div class="tile"${title ? ` title="${esc(title)}"` : ''}><div class="label">${l}</div><div class="value ${p != null ? pnlCls(p) : ''}">${v}</div><div class="sub">${s}</div></div>`).join('');
 }
 
 // ---------- charts (inline SVG) ----------
@@ -299,7 +334,8 @@ function table(cols, rows, empty) {
 const side = r => `<span class="pill ${r.side}">${r.side}</span>`;
 
 function renderOpen(d) {
-  const rows = d.current || [];
+  if (!d.current) { document.getElementById('open-table').innerHTML = '<div class="empty">Waiting for Betfair…</div>'; return; }
+  const rows = d.current;
   document.getElementById('open-count').textContent = rows.length ? rows.length + ' orders' : '';
   document.getElementById('open-table').innerHTML = table([
     {h: 'Start', f: r => time(r.start)},
@@ -316,6 +352,7 @@ function renderOpen(d) {
   ], rows, 'No open orders.');
 }
 
+const stratNet = r => r.profit - r.commission - r.nsw_charge;
 function renderStrategies(d) {
   const rows = d.strategies || [];
   document.getElementById('strategy-table').innerHTML = table([
@@ -324,10 +361,11 @@ function renderStrategies(d) {
     {h: 'Won', num: 1, f: r => r.won},
     {h: 'Strike', num: 1, f: r => (100 * r.won / r.bets).toFixed(1) + '%'},
     {h: 'Staked', num: 1, f: r => money(r.staked)},
-    {h: 'Profit', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
+    {h: 'Gross', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
+    {h: 'Comm.', num: 1, f: r => r.commission ? '−' + money(r.commission) : '–'},
     {h: 'NSW est.', num: 1, f: r => r.nsw_charge ? '−' + money(r.nsw_charge) : '–'},
-    {h: 'After NSW', num: 1, f: r => signed(r.profit - r.nsw_charge), cls: r => pnlCls(r.profit - r.nsw_charge)},
-    {h: 'POT', num: 1, f: r => r.staked ? (100 * (r.profit - r.nsw_charge) / r.staked).toFixed(1) + '%' : '–', cls: r => pnlCls(r.profit - r.nsw_charge)},
+    {h: 'Net', num: 1, f: r => signed(stratNet(r)), cls: r => pnlCls(stratNet(r))},
+    {h: 'POT', num: 1, f: r => r.staked ? (100 * stratNet(r) / r.staked).toFixed(1) + '%' : '–', cls: r => pnlCls(stratNet(r))},
   ], rows, 'No settled bets in this period.');
 }
 
@@ -335,28 +373,33 @@ function renderNsw(d) {
   const n = d.nsw || {}, rows = [...(n.weeks || [])].reverse();
   document.getElementById('nsw-table').innerHTML = table([
     {h: 'Week of', f: r => shortDate(r.week) + (r.in_progress ? ' (this week)' : '') + (r.partial ? ' (partial)' : '')},
-    {h: 'Markets', num: 1, f: r => r.markets},
+    {h: 'Markets', num: 1, f: r => r.markets + (r.estimated ? ` (${r.estimated} est.)` : '')},
     {h: 'Back turnover', num: 1, f: r => money(r.turnover)},
     {h: 'Comm. paid', num: 1, f: r => money(r.paid)},
     {h: 'Implied comm.', num: 1, f: r => money(r.implied)},
     {h: 'Generated', num: 1, f: r => pct(r.generated_pct)},
+    {h: 'vs 1.25%', num: 1, f: gapText, cls: r => r.turnover >= 1000 ? pnlCls(nswGap(r)) : ''},
     {h: 'Charged', f: r => r.charged ? 'Yes' : r.turnover < 1000 ? 'No (under $1k)' : 'No'},
     {h: 'Charge', num: 1, f: r => r.charge ? '−' + money(r.charge) : '–', cls: r => r.charge ? 'neg' : ''},
   ], rows, 'No NSW thoroughbred markets in this period.');
   const u = n.unknown_venues || [];
   document.getElementById('nsw-note').textContent =
     'Charged when weekly NSW back turnover ≥ $1,000 and (commission paid + 3% of losing markets) ÷ 2 is under 1.25% of it; the charge is 3% of turnover. ' +
-    'Only settled bets on this account are counted; the current week is provisional.' +
-    (u.length ? ` Venues not in venue_states.csv, counted as NSW: ${u.join(', ')}.` : '');
+    '"vs 1.25%" is how far commission generated is above or below that line; a shortfall takes twice its size in extra commission paid to close, since only half of commission paid counts. ' +
+    'Only settled bets on this account are counted; the current week is provisional. ' +
+    'Markets are counted when Betfair flags them as Racing NSW Turnover Charge markets; ones that settled before the dashboard recorded the flag are matched by venue instead (est.), which can’t exclude NSW harness.' +
+    (u.length ? ` Venues raced in AU hours that aren’t in venue_states.csv, so not counted: ${u.join(', ')}.` : '');
 }
 
 async function renderSettled() {
   const q = document.getElementById('search').value;
   const s = document.getElementById('side-filter').value;
+  const range = RANGE;
   let res;
   try {
-    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}`, {cache: 'no-store'})).json();
+    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}&days=${range}`, {cache: 'no-store'})).json();
   } catch (e) { return; }
+  if (range !== RANGE) return;   // range changed while this was in flight
   const shown = res.bets, pnl = res.profit;
   document.getElementById('settled-count').innerHTML =
     `${res.count} bets · <span class="${pnlCls(pnl)}">${signed(pnl)}</span> gross${res.count > shown.length ? ` · showing latest ${shown.length}` : ''}`;
@@ -379,27 +422,33 @@ document.getElementById('search').oninput = () => { clearTimeout(searchT); searc
 document.getElementById('side-filter').onchange = renderSettled;
 
 // ---------- polling ----------
+let loadT;
 async function load() {
+  clearTimeout(loadT);
   const st = document.getElementById('status'), stText = document.getElementById('status-text');
+  let next = REFRESH_MS;
   try {
-    const res = await fetch('api/data', {cache: 'no-store'});
+    const range = RANGE;
+    const res = await fetch(`api/data?days=${range}`, {cache: 'no-store'});
     const d = await res.json();
+    if (range !== RANGE) return;   // range changed while this was in flight
     st.className = 'status meta ' + d.status;
-    if (d.status === 'starting') { stText.textContent = 'Connecting to Betfair…'; return; }
-    stText.textContent = (d.status === 'ok' ? 'Live' : 'Stale') +
+    if (d.status === 'starting') { stText.textContent = 'Connecting to Betfair…'; next = STARTING_MS; }
+    else stText.textContent = (d.status === 'ok' ? 'Live' : 'Stale') +
       (d.updated ? ' · updated ' + new Date(d.updated).toLocaleTimeString() : '');
     document.getElementById('error').textContent = d.status === 'error' ? 'Last refresh failed: ' + d.error : '';
-    if (!d.funds) return;
+    // settled history comes from the server's database, so show it even before Betfair answers
     DATA = d;
     renderTiles(d); renderCharts(d); renderOpen(d); renderStrategies(d); renderNsw(d); renderSettled();
   } catch (e) {
     st.className = 'status meta error'; stText.textContent = 'Dashboard server unreachable';
+    next = STARTING_MS * 5;
   }
+  loadT = setTimeout(load, next);
 }
 let resizeT;
 addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => DATA && renderCharts(DATA), 150); });
 load();
-setInterval(load, REFRESH_MS);
 </script>
 </body>
 </html>

@@ -9,7 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py venue_states.csv ./
 COPY static ./static
 
-RUN useradd --create-home app
+RUN useradd --create-home app && mkdir data && chown app data
+VOLUME /app/data
 USER app
 
 EXPOSE 8000
