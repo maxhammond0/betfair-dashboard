@@ -138,7 +138,7 @@ td .book { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
   <section class="charts">
     <div class="card">
-      <div class="chart-head"><h2>Cumulative P&amp;L</h2><span class="meta">net vs gross; the gap is commission and NSW charge</span></div>
+      <div class="chart-head"><h2>Cumulative net P&amp;L</h2><span class="meta">after commission and NSW charge</span></div>
       <div class="legend" id="cum-legend"></div>
       <div class="chart" id="cum-chart"></div>
       <div class="chart-stats" id="cum-stats"></div>
@@ -478,23 +478,19 @@ function dayTip(day) {
 }
 
 function renderCumulative(el, days) {
-  let net = 0, gross = 0;
-  const cumNet = days.map(x => net += x.net), cumGross = days.map(x => gross += x.gross);
-  const cNet = css('--series'), cGross = css('--muted');
+  let net = 0;
+  const cumNet = days.map(x => net += x.net), cNet = css('--series');
   lineChart(el, {
-    labels: days.map(x => shortDate(x.date)), aria: 'Cumulative net and gross profit and loss by day',
-    series: [{name: 'Gross', values: cumGross, color: cGross, dash: true, width: 1.5}, {name: 'Net', values: cumNet, color: cNet}],
+    labels: days.map(x => shortDate(x.date)), aria: 'Cumulative net profit and loss by day',
+    series: [{name: 'Net', values: cumNet, color: cNet}],
     tip: i => tipHead(shortDate(days[i].date)) +
-      tipRow(lineKey(cNet), 'net', signed(cumNet[i]), pnlCls(cumNet[i])) +
-      tipRow(lineKey(cGross, true), 'gross', signed(cumGross[i]), pnlCls(cumGross[i])) +
-      tipRow('', 'commission + NSW', money(cumGross[i] - cumNet[i])) + dayTip(days[i]),
+      tipRow(lineKey(cNet), 'cumulative net', signed(cumNet[i]), pnlCls(cumNet[i])) + dayTip(days[i]),
   });
-  setLegend('cum-legend', [[lineKey(cNet), 'Net (after commission and NSW charge)'], [lineKey(cGross, true), 'Gross']]);
+  const gross = days.reduce((a, x) => a + x.gross, 0);
   const comm = days.reduce((a, x) => a + x.commission, 0), nsw = days.reduce((a, x) => a + x.nsw_charge, 0);
   setStats('cum-stats', [
     stat('Net', signed(net), pnlCls(net)), stat('Gross', signed(gross), pnlCls(gross)),
     stat('Commission', money(comm)), stat('NSW', money(nsw)),
-    gross > 0 && stat('Costs took', pct((comm + nsw) / gross) + ' of gross'),
   ]);
 }
 
