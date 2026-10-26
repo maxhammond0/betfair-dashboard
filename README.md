@@ -1,8 +1,10 @@
 # betfair-dashboard
 
 Read-only web dashboard for the Betfair account: balance and exposure, open
-orders, settled bets, daily and cumulative P&L, P&L by `customer_strategy_ref`,
-and an estimate of the NSW turnover charge.
+orders, settled bets, daily and cumulative P&L (net and gross), drawdown, P&L by
+`customer_strategy_ref` (table and cumulative chart), gross P&L and strike rate by
+matched price band, and an estimate of the NSW turnover charge with a weekly
+commission-generated chart.
 
 It only calls read endpoints (account funds, current orders, cleared orders,
 market catalogue), so it cannot place, cancel or change bets. It logs in with
@@ -28,6 +30,13 @@ past Betfair's 90 days.
 The buttons at the top of the page pick how much settled history the P&L,
 strategy, NSW and settled-bet sections cover (today, 7/30/60/90 days, or
 everything stored). The choice is remembered per browser.
+
+The strategy menu next to them narrows the page to one `customer_strategy_ref`:
+P&L tiles and charts, strike rate, open orders and settled selections then cover
+only that strategy's bets, with each market's commission cut to its share (as in
+the strategy table). Balance, exposure, transfers and the NSW weekly table stay
+account-wide, since the NSW charge is decided on all strategies together; the
+strategy's P&L carries its share of the charge, by its NSW back stake.
 
 The delayed app key works: account and order data aren't delayed.
 
@@ -59,12 +68,17 @@ the LAN or put it behind your reverse proxy's auth.
   profit is gross, since Betfair charges commission per market. The strategy
   table splits each market's commission between the strategies that won in it,
   in proportion to what each won, so its Net column adds up to the daily P&L.
-- The NSW turnover charge is an **estimate**, not Betfair's invoice. Per Mon–Sun
-  GMT week, on Racing NSW turnover charge markets, it charges 3% of back turnover
-  when turnover is at least $1,000 and (commission paid + 3% of each losing
-  market's loss) / 2 is under 1.25% of it (Betfair Charges §9.3). Daily P&L
-  subtracts it, spread over the week's NSW back bets. The current week is
-  provisional.
+- The NSW turnover charge is estimated per Mon–Sun GMT week: on Racing NSW
+  turnover charge markets, 3% of back turnover when turnover is at least $1,000
+  and (commission paid + 3% of each losing market's loss) / 2 is under 1.25% of
+  it (Betfair Charges §9.3). Once Betfair debits a week's charge (an account
+  statement item like "AUS Turnover Chg ADJ77 - wk start 12-Oct-26", usually the
+  Tuesday after) that amount replaces the estimate. It only comes with the full
+  statement, so the dashboard reads just the 5 days after each finished week
+  (hourly until found; about 200 calls the first time, for 90 days). Daily P&L
+  subtracts the charge, spread over the week's NSW back bets. The current week
+  is provisional: the tile shows the charge if the week ended now, and at the
+  week's pace so far.
 - Charged markets are identified by Betfair's own flag: their rules text says
   "This is a Racing NSW Turnover Charge market" (NSW thoroughbred meetings; not
   NSW harness, not Canberra). The flag can only be read while a market is open,

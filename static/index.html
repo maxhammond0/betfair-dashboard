@@ -13,6 +13,8 @@
   --series: #2a78d6; --pos: #2a78d6; --neg: #e34948;
   --good-text: #006300; --bad-text: #d03b3b; --warn: #fab219;
   --hover: rgba(11,11,11,0.04);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -23,6 +25,8 @@
     --series: #3987e5; --pos: #3987e5; --neg: #e66767;
     --good-text: #0ca30c; --bad-text: #e66767;
     --hover: rgba(255,255,255,0.05);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
   }
 }
 :root[data-theme="dark"] {
@@ -33,6 +37,8 @@
   --series: #3987e5; --pos: #3987e5; --neg: #e66767;
   --good-text: #0ca30c; --bad-text: #e66767;
   --hover: rgba(255,255,255,0.05);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink);
@@ -66,12 +72,31 @@ button.theme { background: none; border: 1px solid var(--border); color: var(--i
 @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
 .charts .card { margin-bottom: 0; }
 .chart { position: relative; }
-.chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+.chart > svg { display: block; width: 100%; height: 220px; overflow: visible; }
 .chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
   border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; display: none; z-index: 2; }
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; display: none; z-index: 2;
+  width: max-content; max-width: min(340px, 100%); }
 .tip b { font-variant-numeric: tabular-nums; }
+.chart > svg:focus { outline: none; }
+.chart > svg:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
+.chart text.lbl { fill: var(--ink-2); }
+.chart-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-bottom: 6px; }
+.chart-head h2 { margin: 0; }
+.chart-head .meta { font-size: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; min-height: 18px; margin-bottom: 4px; font-size: 12px; color: var(--ink-2); }
+.legend .li { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.key { display: inline-block; width: 14px; flex: none; }
+.trow { display: flex; align-items: center; gap: 6px; }
+.trow > span:last-child { color: var(--ink-2); white-space: normal; }
+.trow > b { flex: none; }
+.thead { font-weight: 600; margin-bottom: 2px; }
+.tsub { color: var(--ink-2); font-size: 11px; margin: 0 0 2px 20px; white-space: normal; max-width: 300px; }
+.chart-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12px; }
+.chart-stats .sl { color: var(--ink-2); }
+.chart-stats b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .section-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
 .section-row h2 { margin: 0; }
 input[type=search], select { background: var(--page); color: var(--ink); border: 1px solid var(--border);
@@ -82,12 +107,16 @@ th, td { padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom:
 th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; z-index: 1; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--hover); }
+tfoot td { position: sticky; bottom: 0; background: var(--surface); font-weight: 600;
+  border-top: 1px solid var(--axis); border-bottom: 0; }
 .pos { color: var(--good-text); }
 .neg { color: var(--bad-text); }
 .pill { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
   border: 1px solid var(--border); }
 .pill.BACK { color: var(--pos); } .pill.LAY { color: var(--neg); }
 .empty { color: var(--muted); padding: 12px 0; }
+h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 14px 0 6px; }
+td .book { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .err { color: var(--bad-text); font-size: 13px; }
 </style>
 </head>
@@ -97,6 +126,7 @@ tbody tr:hover { background: var(--hover); }
     <h1>Betfair Result Dashboard</h1>
     <span class="status meta" id="status"><span class="dot"></span><span id="status-text">Loading…</span></span>
     <span class="spacer"></span>
+    <select id="strategy" aria-label="Strategy"><option value="">All strategies</option></select>
     <div class="range" id="range" role="group" aria-label="Settled history range">
       <button data-days="1">Today</button><button data-days="7">7d</button><button data-days="30">30d</button><button data-days="60">60d</button><button data-days="90">90d</button><button data-days="0" title="Everything stored, including bets older than Betfair's 90 days">All</button>
     </div>
@@ -107,13 +137,50 @@ tbody tr:hover { background: var(--hover); }
   <section class="tiles" id="tiles"></section>
 
   <section class="charts">
-    <div class="card"><h2>Cumulative net P&amp;L</h2><div class="chart" id="cum-chart"></div></div>
-    <div class="card"><h2>Daily net P&amp;L</h2><div class="chart" id="daily-chart"></div></div>
+    <div class="card">
+      <div class="chart-head"><h2>Cumulative P&amp;L</h2><span class="meta">net vs gross; the gap is commission and NSW charge</span></div>
+      <div class="legend" id="cum-legend"></div>
+      <div class="chart" id="cum-chart"></div>
+      <div class="chart-stats" id="cum-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Daily net P&amp;L</h2><span class="meta">by settlement day, Sydney time</span></div>
+      <div class="legend" id="daily-legend"></div>
+      <div class="chart" id="daily-chart"></div>
+      <div class="chart-stats" id="daily-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Drawdown</h2><span class="meta">how far net is below its highest point so far</span></div>
+      <div class="legend" id="dd-legend"></div>
+      <div class="chart" id="dd-chart"></div>
+      <div class="chart-stats" id="dd-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Cumulative net by strategy</h2><span class="meta">after each strategy’s share of commission and NSW charge</span></div>
+      <div class="legend" id="strat-legend"></div>
+      <div class="chart" id="strat-chart"></div>
+      <div class="chart-stats" id="strat-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Gross P&amp;L by matched price</h2><span class="meta">before commission · strike rate vs the rate the price implies</span></div>
+      <div class="legend" id="odds-legend"></div>
+      <div class="chart" id="odds-chart"></div>
+      <div class="chart-stats" id="odds-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>NSW commission generated</h2><span class="meta">per Mon–Sun GMT week, as a share of NSW back turnover</span></div>
+      <div class="legend" id="nsw-legend"></div>
+      <div class="chart" id="nsw-chart"></div>
+      <div class="chart-stats" id="nsw-stats"></div>
+    </div>
   </section>
   <div style="height:16px"></div>
 
   <section class="card">
     <div class="section-row"><h2>Open orders</h2><span class="meta" id="open-count"></span></div>
+    <h3>Matched by selection</h3>
+    <div class="table-wrap" id="matched-table"></div>
+    <h3>Unmatched</h3>
     <div class="table-wrap" id="open-table"></div>
   </section>
 
@@ -130,7 +197,7 @@ tbody tr:hover { background: var(--hover); }
 
   <section class="card">
     <div class="section-row">
-      <h2>Settled bets</h2>
+      <h2>Settled selections</h2>
       <input type="search" id="search" placeholder="Filter runner, event, strategy…">
       <select id="side-filter"><option value="">All sides</option><option>BACK</option><option>LAY</option></select>
       <span class="meta" id="settled-count"></span>
@@ -154,6 +221,27 @@ rangeBtns.forEach(b => b.onclick = () => {
   load();
 });
 markRange();
+
+// ---------- strategy filter (remembered per browser) ----------
+let STRATEGY = '';
+try { STRATEGY = localStorage.getItem('strategy') || ''; } catch (e) {}
+const stratSel = document.getElementById('strategy');
+stratSel.onchange = () => {
+  STRATEGY = stratSel.value;
+  try { localStorage.setItem('strategy', STRATEGY); } catch (e) {}
+  load();
+};
+// every strategy seen in settled history or open orders, plus the chosen one even if it has neither
+function fillStrategies(d) {
+  const names = new Set([...(d.strategy_names || []), ...(d.current || []).map(o => o.strategy).filter(Boolean)]);
+  if (STRATEGY) names.add(STRATEGY);
+  const opts = ['', ...[...names].sort()];
+  if (opts.join('\n') !== [...stratSel.options].map(o => o.value).join('\n'))
+    stratSel.innerHTML = opts.map(v => `<option value="${esc(v)}">${v ? esc(v) : 'All strategies'}</option>`).join('');
+  stratSel.value = STRATEGY;
+}
+// open orders narrowed to the chosen strategy (settled history is narrowed by the server)
+const currentOrders = d => d.current && (STRATEGY ? d.current.filter(o => o.strategy === STRATEGY) : d.current);
 
 // ---------- theme toggle (per-viewer convenience only) ----------
 const root = document.documentElement;
@@ -195,18 +283,20 @@ function renderTiles(d) {
   const comm = daily.reduce((a, x) => a + x.commission, 0);
   const nswTotal = daily.reduce((a, x) => a + x.nsw_charge, 0);
   const wk = ((d.nsw || {}).weeks || []).find(w => w.in_progress);
-  const open = d.current || [];
+  const open = currentOrders(d) || [];
   const unmatched = open.filter(o => o.remaining > 0).length;
   const tr = d.transfers || {};
   const tiles = [
     ['Available to bet', money(f.available), ''],
     ['Exposure', money(f.exposure), f.exposure_limit != null ? 'limit ' + money(f.exposure_limit) : ''],
-    ['Open orders', d.current ? open.length : '–', d.current ? unmatched + ' with unmatched stake' : ''],
+    [STRATEGY ? 'Open orders (strategy)' : 'Open orders', d.current ? open.length : '–', d.current ? unmatched + ' with unmatched stake' : ''],
     ['Today net P&L', signed(t ? t.net : 0), t ? t.markets + ' markets settled' : 'nothing settled yet', t ? t.net : 0],
-    [d.range_days === 1 ? 'Net P&L today' : d.since ? `Net P&L since ${shortDate(d.since)}` : 'Net P&L', signed(total), `commission ${money(comm)} · NSW est. ${money(nswTotal)}`, total],
-    ['NSW charge this week', wk ? money(wk.charge) : money(0),
-      !wk ? 'no NSW back bets yet' : wk.turnover < 1000 ? `turnover ${money(wk.turnover)}, under $1,000`
-        : `generated ${pct(wk.generated_pct)} of turnover · ${money(Math.abs(nswGap(wk)))} ${nswGap(wk) >= 0 ? 'clear of' : 'short of'} 1.25%`],
+    [d.range_days === 1 ? 'Net P&L today' : d.since ? `Net P&L since ${shortDate(d.since)}` : 'Net P&L', signed(total), `commission ${money(comm)} · NSW ${money(nswTotal)}`, total],
+    ['NSW charge this week (est.)', wk ? money(wk.charge) : money(0),
+      (!wk ? 'no NSW back bets yet' : (wk.turnover < 1000 ? `turnover ${money(wk.turnover)}, under $1,000`
+        : `generated ${pct(wk.generated_pct)} of turnover · ${money(Math.abs(nswGap(wk)))} ${nswGap(wk) >= 0 ? 'clear of' : 'short of'} 1.25%`)
+        + ` · on pace for ${money(wk.projected)} by Sunday`),
+      null, wk ? `If the week ended now: ${money(wk.charge)}\nAt this pace for the full week: ${money(wk.projected)}\nBack turnover so far ${money(wk.turnover)}` : ''],
     ['Withdrawals', money(tr.withdrawals ?? 0),
       `deposits ${money(tr.deposits ?? 0)}` + (tr.items && tr.items.length ? ` · ${tr.items.length} transfer${tr.items.length > 1 ? 's' : ''}` : ''),
       null, (tr.items || []).map(t => `${shortDate(t.date.slice(0, 10))}  ${signed(t.amount)}  ${t.description || ''}`).join('\n')],
@@ -218,125 +308,395 @@ function renderTiles(d) {
 
 // ---------- charts (inline SVG) ----------
 const css = n => getComputedStyle(root).getPropertyValue(n).trim();
+const slot = i => css(`--s${i + 1}`);   // categorical colours, in fixed order
+const axisMoney = t => money(t).replace('.00', '');
+const axisPct = t => +(100 * t).toFixed(2) + '%';
+const trunc = (s, n = 14) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 
 function niceTicks(lo, hi, n = 4) {
   if (lo === hi) { lo -= 1; hi += 1; }
   const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0));
   const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
   const ticks = [];
-  for (let v = Math.floor(lo / step) * step; v <= hi + step * 0.5; v += step) ticks.push(+v.toFixed(10));
+  // from the tick at or below lo to the first at or above hi
+  for (let v = Math.floor(lo / step) * step; ; v += step) { ticks.push(+v.toFixed(10)); if (v >= hi - step * 1e-9) break; }
   return ticks;
 }
 
-function frame(el, days, values) {
-  const W = el.clientWidth || 500, H = 220, m = {t: 10, r: 8, b: 24, l: 56};
+function frame(el, values, {fmt = axisMoney, right = 8} = {}) {
+  const W = el.clientWidth || 500, H = 220, m = {t: 10, r: right, b: 24, l: 56};
   const ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values));
   const y0 = ticks[0], y1 = ticks[ticks.length - 1];
   const y = v => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
   let g = '';
   for (const t of ticks) {
     g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? css('--axis') : css('--grid')}" stroke-width="1"/>`;
-    g += `<text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${money(t).replace('.00', '')}</text>`;
+    g += `<text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
   }
   return {W, H, m, y, g};
 }
 
-function xLabels(days, x, H, m) {
-  if (!days.length) return '';
-  const idx = [...new Set([0, Math.floor((days.length - 1) / 2), days.length - 1])];
-  return idx.map((i, k) => `<text x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 && idx.length > 1 ? 'start' : k === idx.length - 1 && idx.length > 1 ? 'end' : 'middle'}">${shortDate(days[i].date)}</text>`).join('');
+// as many x labels as fit, evenly spaced, always including the first and last
+function xLabels(n, x, W, H, m, label, all = false, centred = all) {
+  if (!n) return '';
+  const k = all ? n : Math.max(2, Math.min(n, Math.floor((W - m.l - m.r) / 80)));
+  const idx = n === 1 ? [0] : [...new Set(Array.from({length: k}, (_, j) => Math.round(j * (n - 1) / (k - 1))))];
+  return idx.map((i, j) => {
+    const anchor = centred || idx.length === 1 ? 'middle' : j === 0 ? 'start' : j === idx.length - 1 ? 'end' : 'middle';
+    return `<line x1="${x(i)}" x2="${x(i)}" y1="${H - m.b}" y2="${H - m.b + 4}" stroke="${css('--axis')}"/>` +
+      `<text x="${x(i)}" y="${H - 6}" text-anchor="${anchor}">${esc(label(i))}</text>`;
+  }).join('');
 }
 
+// hover and keyboard (focus the chart, then ←/→) both move a readout across the x positions
 function attachHover(el, n, xOf, html, onMove) {
   const tip = el.querySelector('.tip'), svg = el.querySelector('svg');
+  let cur = null;
+  const show = i => {
+    cur = i;
+    onMove && onMove(i);
+    if (i == null) { tip.style.display = 'none'; return; }
+    tip.innerHTML = html(i); tip.style.display = 'block';
+    const w = svg.getBoundingClientRect().width, px = xOf(i);
+    tip.style.left = (px + 12 + tip.offsetWidth > w ? Math.max(0, px - tip.offsetWidth - 12) : px + 12) + 'px';
+    tip.style.top = '8px';
+  };
+  svg.setAttribute('tabindex', '0');
   svg.onmousemove = e => {
-    const r = svg.getBoundingClientRect(), px = e.clientX - r.left;
+    const px = e.clientX - svg.getBoundingClientRect().left;
     let best = 0, bd = Infinity;
     for (let i = 0; i < n; i++) { const dd = Math.abs(xOf(i) - px); if (dd < bd) { bd = dd; best = i; } }
-    tip.innerHTML = html(best); tip.style.display = 'block';
-    const left = Math.min(Math.max(xOf(best) + 12, 0), r.width - tip.offsetWidth);
-    tip.style.left = (xOf(best) + 12 + tip.offsetWidth > r.width ? xOf(best) - tip.offsetWidth - 12 : left) + 'px';
-    tip.style.top = '8px';
-    onMove && onMove(best);
+    if (best !== cur) show(best);
   };
-  svg.onmouseleave = () => { tip.style.display = 'none'; onMove && onMove(null); };
+  svg.onmouseleave = () => document.activeElement !== svg && show(null);
+  svg.onfocus = () => show(cur ?? n - 1);
+  svg.onblur = () => show(null);
+  svg.onkeydown = e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      show(Math.max(0, Math.min(n - 1, (cur ?? n - 1) + (e.key === 'ArrowRight' ? 1 : -1))));
+    } else if (e.key === 'Escape') svg.blur();
+  };
 }
 
-function tipHtml(day) {
-  return `<div>${shortDate(day.date)}</div>
-    <div>Net <b class="${pnlCls(day.net)}">${signed(day.net)}</b></div>
-    <div style="color:var(--ink-2)">Gross ${signed(day.gross)} · comm ${money(day.commission)}${day.nsw_charge ? ' · NSW ' + money(day.nsw_charge) : ''} · ${day.markets} mkts</div>`;
+// tooltip rows and legend entries: a short stroke keys a line, a swatch keys a bar
+const lineKey = (color, dash) => `<svg class="key" width="14" height="8" aria-hidden="true"><line x1="1" x2="13" y1="4" y2="4" stroke="${color}" stroke-width="2" stroke-linecap="round"${dash ? ' stroke-dasharray="3 3"' : ''}/></svg>`;
+const swatch = color => `<span class="sw" style="background:${color}"></span>`;
+const tipRow = (key, label, value, cls = '') => `<div class="trow">${key || '<span class="key"></span>'}<b class="${cls}">${value}</b><span>${esc(label)}</span></div>`;
+const tipHead = s => `<div class="thead">${esc(s)}</div>`;
+const tipSub = s => `<div class="tsub">${s}</div>`;
+const setLegend = (id, items) => document.getElementById(id).innerHTML =
+  items.map(([key, label]) => `<span class="li">${key}${esc(label)}</span>`).join('');
+const stat = (label, value, cls = '') => `<span><span class="sl">${esc(label)}</span> <b class="${cls}">${value}</b></span>`;
+const setStats = (id, items) => document.getElementById(id).innerHTML = items.filter(Boolean).join('');
+
+function lineChart(el, {labels, series, tip, fmt, aria, endLabels = false, annotate}) {
+  const n = labels.length;
+  const {W, H, m, y, g} = frame(el, series.flatMap(s => s.values), {fmt, right: endLabels ? 100 : 8});
+  const x = i => n === 1 ? (m.l + W - m.r) / 2 : m.l + (W - m.l - m.r) * i / (n - 1);
+  const path = vs => vs.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('');
+  let marks = '';
+  for (const s of series) {
+    if (s.area) marks += `<path d="${path(s.values)}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="${s.color}" fill-opacity="0.14"/>`;
+    marks += `<path d="${path(s.values)}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}"${s.dash ? ' stroke-dasharray="4 4"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  // end dots, and direct labels nudged apart so they don't overlap
+  const ends = series.filter(s => !s.dash).map(s => ({s, ly: y(s.values[n - 1])})).sort((a, b) => a.ly - b.ly);
+  for (let k = 1; k < ends.length; k++) ends[k].ly = Math.max(ends[k].ly, ends[k - 1].ly + 13);
+  marks += ends.map(e => `<circle cx="${x(n - 1)}" cy="${y(e.s.values[n - 1])}" r="4" fill="${e.s.color}" stroke="${css('--surface')}" stroke-width="2"/>` +
+    (endLabels ? `<text class="lbl" x="${x(n - 1) + 8}" y="${e.ly + 4}">${esc(trunc(e.s.name))}</text>` : '')).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}">
+    ${g}${marks}${annotate ? annotate(x, y) : ''}${xLabels(n, x, W, H, m, i => labels[i])}
+    <line class="cross" y1="${m.t}" y2="${H - m.b}" stroke="${css('--axis')}" stroke-width="1" visibility="hidden"/>
+    ${series.map(s => `<circle class="hd" r="4" fill="${s.color}" stroke="${css('--surface')}" stroke-width="2" visibility="hidden"/>`).join('')}
+  </svg><div class="tip"></div>`;
+  const cross = el.querySelector('.cross'), dots = el.querySelectorAll('.hd');
+  attachHover(el, n, x, tip, i => {
+    const vis = i == null ? 'hidden' : 'visible';
+    cross.setAttribute('visibility', vis);
+    dots.forEach((dot, k) => {
+      dot.setAttribute('visibility', vis);
+      if (i != null) { dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(series[k].values[i])); }
+    });
+    if (i != null) { cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); }
+  });
 }
+
+// a bar rounded at its data end only, square at the zero baseline
+function barPath(x0, bw, v, y) {
+  const top = Math.min(y(v), y(0)), h = Math.max(1, Math.abs(y(v) - y(0))), r = Math.min(4, bw / 2, h), x1 = x0 + bw;
+  return v >= 0
+    ? `M${x0},${top + h}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x1 - r}Q${x1},${top} ${x1},${top + r}V${top + h}Z`
+    : `M${x0},${top}V${top + h - r}Q${x0},${top + h} ${x0 + r},${top + h}H${x1 - r}Q${x1},${top + h} ${x1},${top + h - r}V${top}Z`;
+}
+
+// groups: [{color: (v, i) => colour, values}], side by side in each band; null values are skipped
+function barChart(el, {labels, groups, tip, fmt, aria, ref, lines = [], allLabels = false}) {
+  const n = labels.length, k = groups.length;
+  const vals = [...groups.flatMap(g => g.values), ...lines.flatMap(l => l.values), ...(ref ? [ref.value] : [])].filter(v => v != null);
+  const {W, H, m, y, g} = frame(el, vals, {fmt, right: ref ? 40 : 8});
+  const band = (W - m.l - m.r) / n;
+  const gw = Math.max(2 * k, Math.min(24 * k + 2 * (k - 1), band - Math.max(2, band * 0.25)));
+  const bw = (gw - 2 * (k - 1)) / k;   // 2px gap between bars in a band
+  const x = i => m.l + band * (i + 0.5);
+  let bars = '';
+  groups.forEach((grp, j) => grp.values.forEach((v, i) => {
+    if (v == null) return;
+    bars += `<path class="bar" data-i="${i}" d="${barPath(x(i) - gw / 2 + j * (bw + 2), bw, v, y)}" fill="${grp.color(v, i)}"/>`;
+  }));
+  const refLine = ref ? `<line x1="${m.l}" x2="${W - m.r}" y1="${y(ref.value)}" y2="${y(ref.value)}" stroke="${css('--ink-2')}" stroke-width="1" stroke-dasharray="4 3"/>
+    <text class="lbl" x="${W - m.r + 4}" y="${y(ref.value) + 4}">${esc(ref.label)}</text>` : '';
+  const overlay = lines.map(l => `<path d="${l.values.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('')}" fill="none" stroke="${l.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}">
+    ${g}${bars}${overlay}${refLine}${xLabels(n, x, W, H, m, i => labels[i], allLabels, true)}
+  </svg><div class="tip"></div>`;
+  const barEls = el.querySelectorAll('.bar');
+  attachHover(el, n, x, tip, i => barEls.forEach(b => b.style.opacity = i == null || +b.dataset.i === i ? 1 : 0.45));
+}
+
+const empty = (el, msg) => el.innerHTML = `<div class="empty">${msg}</div>`;
 
 function renderCharts(d) {
   const days = d.daily || [];
-  const cumEl = document.getElementById('cum-chart'), dayEl = document.getElementById('daily-chart');
+  const els = Object.fromEntries(['cum', 'daily', 'dd', 'strat', 'odds', 'nsw'].map(k => [k, document.getElementById(k + '-chart')]));
+  for (const k of ['cum', 'daily', 'dd', 'strat', 'odds', 'nsw']) { setLegend(k + '-legend', []); setStats(k + '-stats', []); }
   if (!days.length) {
-    cumEl.innerHTML = dayEl.innerHTML = '<div class="empty">No settled markets in this period.</div>';
-    return;
+    for (const k of ['cum', 'daily', 'dd', 'strat', 'odds']) empty(els[k], 'No settled markets in this period.');
+  } else {
+    renderCumulative(els.cum, days);
+    renderDaily(els.daily, days);
+    renderDrawdown(els.dd, days);
+    renderStrategyLines(els.strat, d);
+    renderOdds(els.odds, d.odds || []);
   }
-  // cumulative line
-  let run = 0;
-  const cum = days.map(x => (run += x.net));
-  {
-    const {W, H, m, y, g} = frame(cumEl, days, cum);
-    const x = i => days.length === 1 ? (m.l + W - m.r) / 2 : m.l + (W - m.l - m.r) * i / (days.length - 1);
-    const path = cum.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('');
-    const last = cum.length - 1;
-    cumEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative net profit and loss by day">
-      ${g}<path d="${path}" fill="none" stroke="${css('--series')}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <line id="cross" y1="${m.t}" y2="${H - m.b}" stroke="${css('--axis')}" stroke-width="1" visibility="hidden"/>
-      <circle id="cdot" r="4" fill="${css('--series')}" stroke="${css('--surface')}" stroke-width="2" visibility="hidden"/>
-      <circle cx="${x(last)}" cy="${y(cum[last])}" r="4" fill="${css('--series')}" stroke="${css('--surface')}" stroke-width="2"/>
-      ${xLabels(days, x, H, m)}
-      <rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>
-    </svg><div class="tip"></div>`;
-    const cross = cumEl.querySelector('#cross'), dot = cumEl.querySelector('#cdot');
-    attachHover(cumEl, days.length, x,
-      i => `${tipHtml(days[i])}<div>Cumulative <b class="${pnlCls(cum[i])}">${signed(cum[i])}</b></div>`,
-      i => {
-        const vis = i == null ? 'hidden' : 'visible';
-        cross.setAttribute('visibility', vis); dot.setAttribute('visibility', vis);
-        if (i != null) { cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(cum[i])); }
-      });
+  renderNswChart(els.nsw, (d.nsw || {}).weeks || []);
+}
+
+function dayTip(day) {
+  return tipSub(`That day: net <span class="${pnlCls(day.net)}">${signed(day.net)}</span> · gross ${signed(day.gross)} · comm ${money(day.commission)}` +
+    `${day.nsw_charge ? ' · NSW ' + money(day.nsw_charge) : ''} · ${day.markets} mkt${day.markets === 1 ? '' : 's'}`);
+}
+
+function renderCumulative(el, days) {
+  let net = 0, gross = 0;
+  const cumNet = days.map(x => net += x.net), cumGross = days.map(x => gross += x.gross);
+  const cNet = css('--series'), cGross = css('--muted');
+  lineChart(el, {
+    labels: days.map(x => shortDate(x.date)), aria: 'Cumulative net and gross profit and loss by day',
+    series: [{name: 'Gross', values: cumGross, color: cGross, dash: true, width: 1.5}, {name: 'Net', values: cumNet, color: cNet}],
+    tip: i => tipHead(shortDate(days[i].date)) +
+      tipRow(lineKey(cNet), 'net', signed(cumNet[i]), pnlCls(cumNet[i])) +
+      tipRow(lineKey(cGross, true), 'gross', signed(cumGross[i]), pnlCls(cumGross[i])) +
+      tipRow('', 'commission + NSW', money(cumGross[i] - cumNet[i])) + dayTip(days[i]),
+  });
+  setLegend('cum-legend', [[lineKey(cNet), 'Net (after commission and NSW charge)'], [lineKey(cGross, true), 'Gross']]);
+  const comm = days.reduce((a, x) => a + x.commission, 0), nsw = days.reduce((a, x) => a + x.nsw_charge, 0);
+  setStats('cum-stats', [
+    stat('Net', signed(net), pnlCls(net)), stat('Gross', signed(gross), pnlCls(gross)),
+    stat('Commission', money(comm)), stat('NSW', money(nsw)),
+    gross > 0 && stat('Costs took', pct((comm + nsw) / gross) + ' of gross'),
+  ]);
+}
+
+function renderDaily(el, days) {
+  const vals = days.map(x => x.net);
+  // average over the last 7 days that had settled markets
+  const avg = vals.map((_, i) => { const w = vals.slice(Math.max(0, i - 6), i + 1); return w.reduce((a, v) => a + v, 0) / w.length; });
+  const cAvg = css('--ink-2');
+  barChart(el, {
+    labels: days.map(x => shortDate(x.date)), aria: 'Daily net profit and loss, with a 7-day average',
+    groups: [{color: v => v >= 0 ? css('--pos') : css('--neg'), values: vals}],
+    lines: days.length >= 3 ? [{values: avg, color: cAvg}] : [],
+    tip: i => tipHead(shortDate(days[i].date)) +
+      tipRow(swatch(vals[i] >= 0 ? css('--pos') : css('--neg')), 'net', signed(vals[i]), pnlCls(vals[i])) +
+      (days.length >= 3 ? tipRow(lineKey(cAvg), '7-day average', signed(avg[i]), pnlCls(avg[i])) : '') +
+      tipRow('', 'gross', signed(days[i].gross)) +
+      tipRow('', 'commission', money(days[i].commission)) +
+      (days[i].nsw_charge ? tipRow('', 'NSW charge', money(days[i].nsw_charge)) : '') +
+      tipRow('', 'markets settled', days[i].markets),
+  });
+  setLegend('daily-legend', [[swatch(css('--pos')), 'Profit'], [swatch(css('--neg')), 'Loss'],
+    ...(days.length >= 3 ? [[lineKey(cAvg), '7-day average']] : [])]);
+  const wins = vals.filter(v => v > 0).length;
+  const best = days.reduce((a, x) => x.net > a.net ? x : a), worst = days.reduce((a, x) => x.net < a.net ? x : a);
+  setStats('daily-stats', [
+    stat('Winning days', `${wins}/${days.length} (${(100 * wins / days.length).toFixed(0)}%)`),
+    stat('Average', signed(vals.reduce((a, v) => a + v, 0) / days.length)),
+    stat(`Best ${shortDate(best.date)}`, signed(best.net), pnlCls(best.net)),
+    stat(`Worst ${shortDate(worst.date)}`, signed(worst.net), pnlCls(worst.net)),
+  ]);
+}
+
+function renderDrawdown(el, days) {
+  // distance below the highest cumulative net so far (starting from 0)
+  let run = 0, peak = 0, peakAt = -1;
+  const rows = days.map((x, i) => {
+    run += x.net;
+    if (run >= peak) { peak = run; peakAt = i; }
+    return {dd: run - peak, peak, peakAt, under: i - peakAt};
+  });
+  const dd = rows.map(r => r.dd), cNeg = css('--neg');
+  const worst = dd.reduce((a, v, i) => v < dd[a] ? i : a, 0);
+  const since = r => r.peakAt < 0 ? 'the start of the period' : shortDate(days[r.peakAt].date);
+  lineChart(el, {
+    labels: days.map(x => shortDate(x.date)), aria: 'Drawdown from the highest cumulative net so far',
+    series: [{name: 'Drawdown', values: dd, color: cNeg, area: true}],
+    annotate: (x, y) => dd[worst] < 0 ? `<circle cx="${x(worst)}" cy="${y(dd[worst])}" r="4" fill="${cNeg}" stroke="${css('--surface')}" stroke-width="2"/>
+      <text class="lbl" x="${x(worst)}" y="${y(dd[worst]) + 16}" text-anchor="middle">max ${money(dd[worst])}</text>` : '',
+    tip: i => tipHead(shortDate(days[i].date)) +
+      tipRow(lineKey(cNeg), 'below peak', dd[i] ? money(dd[i]) : 'at peak', pnlCls(dd[i])) +
+      tipRow('', 'peak', signed(rows[i].peak)) +
+      tipSub(dd[i] ? `peak set ${since(rows[i])}, ${rows[i].under} trading day${rows[i].under === 1 ? '' : 's'} ago` : 'new high'),
+  });
+  const longest = Math.max(...rows.map(r => r.under));
+  const now = rows[rows.length - 1];
+  setStats('dd-stats', [
+    stat('Max drawdown', dd[worst] < 0 ? `${money(dd[worst])} on ${shortDate(days[worst].date)}` : 'none', pnlCls(dd[worst])),
+    stat('Now', now.dd < 0 ? money(now.dd) : 'at peak', pnlCls(now.dd)),
+    stat('Longest below peak', `${longest} trading day${longest === 1 ? '' : 's'}`),
+  ]);
+}
+
+function renderStrategyLines(el, d) {
+  const sd = d.strategy_daily || {}, shown = Object.keys(sd);
+  if (!shown.length) return empty(el, 'No strategy bets in this period.');
+  // colour follows the strategy's place among all strategies, so a filter never repaints one;
+  // past eight, the rest fold into "Other"
+  const all = d.strategy_names || shown, fold = all.length > 8;
+  const keyOf = s => { const i = all.indexOf(s); return fold && (i < 0 || i >= 7) ? 'Other' : s; };
+  const dates = [...new Set(shown.flatMap(s => sd[s].map(r => r.date)))].sort();
+  const byKey = new Map();
+  for (const s of shown) {
+    const k = keyOf(s);
+    if (!byKey.has(k)) byKey.set(k, Object.fromEntries(dates.map(dt => [dt, 0])));
+    for (const r of sd[s]) byKey.get(k)[r.date] += r.net;
   }
-  // daily bars, diverging around zero
-  {
-    const vals = days.map(x => x.net);
-    const {W, H, m, y, g} = frame(dayEl, days, vals);
-    const band = (W - m.l - m.r) / days.length, bw = Math.max(2, Math.min(24, band - 2));
-    const x = i => m.l + band * (i + 0.5);
-    const bars = vals.map((v, i) => {
-      const top = Math.min(y(v), y(0)), h = Math.max(1, Math.abs(y(v) - y(0))), r = Math.min(4, bw / 2, h);
-      // rounded at the data end only, square at the zero baseline
-      const x0 = x(i) - bw / 2, x1 = x0 + bw;
-      const d = v >= 0
-        ? `M${x0},${top + h}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x1 - r}Q${x1},${top} ${x1},${top + r}V${top + h}Z`
-        : `M${x0},${top}V${top + h - r}Q${x0},${top + h} ${x0 + r},${top + h}H${x1 - r}Q${x1},${top + h} ${x1},${top + h - r}V${top}Z`;
-      return `<path class="bar" d="${d}" fill="${v >= 0 ? css('--pos') : css('--neg')}"/>`;
-    }).join('');
-    dayEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily net profit and loss">
-      ${g}${bars}${xLabels(days, x, H, m)}
-      <rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>
-    </svg><div class="tip"></div>`;
-    const barEls = dayEl.querySelectorAll('.bar');
-    attachHover(dayEl, days.length, x, i => tipHtml(days[i]),
-      i => barEls.forEach((b, k) => b.style.opacity = i == null || k === i ? 1 : 0.45));
-  }
+  const series = [...byKey].map(([k, perDay]) => {
+    let run = 0;
+    return {name: k, color: k === 'Other' ? css('--muted') : slot(all.indexOf(k)), values: dates.map(dt => run += perDay[dt]), day: dates.map(dt => perDay[dt])};
+  }).sort((a, b) => (a.name === 'Other') - (b.name === 'Other') || all.indexOf(a.name) - all.indexOf(b.name));
+  lineChart(el, {
+    labels: dates.map(shortDate), aria: 'Cumulative net profit and loss by strategy', endLabels: series.length > 1 && series.length <= 4,
+    series,
+    tip: i => tipHead(shortDate(dates[i])) + [...series].sort((a, b) => b.values[i] - a.values[i]).map(s =>
+      tipRow(lineKey(s.color), `${s.name}${s.day[i] ? ` (${signed(s.day[i])} that day)` : ''}`, signed(s.values[i]), pnlCls(s.values[i]))).join(''),
+  });
+  setLegend('strat-legend', series.length > 1 ? series.map(s => [lineKey(s.color), s.name]) : []);
+  setStats('strat-stats', series.length > 1 ? [...series].sort((a, b) => b.values.at(-1) - a.values.at(-1)).slice(0, 4)
+    .map(s => stat(trunc(s.name, 20), signed(s.values.at(-1)), pnlCls(s.values.at(-1)))) : []);
+}
+
+function renderOdds(el, rows) {
+  if (!rows.length) return empty(el, 'No settled bets in this period.');
+  const bands = [...new Set(rows.map(r => r.band))];
+  const sides = ['BACK', 'LAY'].filter(sd => rows.some(r => r.side === sd));
+  const get = (b, sd) => rows.find(r => r.band === b && r.side === sd);
+  const color = sd => slot(sd === 'BACK' ? 0 : 1), name = sd => sd === 'BACK' ? 'Back' : 'Lay';
+  const sideTip = (r, sd) => {
+    if (!r) return '';
+    const base = sd === 'BACK' ? r.staked : r.liability;
+    const edge = (r.won - r.implied) / r.bets;
+    return tipRow(swatch(color(sd)), name(sd), signed(r.profit), pnlCls(r.profit)) +
+      tipSub(`${r.bets} bet${r.bets === 1 ? '' : 's'} · won ${(100 * r.won / r.bets).toFixed(1)}% vs ${(100 * r.implied / r.bets).toFixed(1)}% implied ` +
+        `(<span class="${pnlCls(edge)}">${edge >= 0 ? '+' : '−'}${Math.abs(100 * edge).toFixed(1)} pts</span>)` +
+        (base ? ` · ${(100 * r.profit / base).toFixed(1).replace('-', '−')}% on ${sd === 'BACK' ? 'stake' : 'liability'}` : ''));
+  };
+  barChart(el, {
+    labels: bands, aria: 'Gross profit and loss by matched price band, back and lay', allLabels: true,
+    groups: sides.map(sd => ({color: () => color(sd), values: bands.map(b => get(b, sd)?.profit ?? null)})),
+    tip: i => tipHead(`Price ${bands[i]}`) + sides.map(sd => sideTip(get(bands[i], sd), sd)).join(''),
+  });
+  setLegend('odds-legend', sides.length > 1 ? sides.map(sd => [swatch(color(sd)), name(sd)]) : []);
+  const tot = sd => rows.filter(r => r.side === sd).reduce((a, r) => ({p: a.p + r.profit, n: a.n + r.bets, w: a.w + r.won, i: a.i + r.implied}), {p: 0, n: 0, w: 0, i: 0});
+  setStats('odds-stats', sides.map(sd => {
+    const t = tot(sd), edge = (t.w - t.i) / t.n;
+    return stat(`${name(sd)} · ${t.n} bets`, `${signed(t.p)} · ${edge >= 0 ? '+' : '−'}${Math.abs(100 * edge).toFixed(1)} pts vs implied`, pnlCls(t.p));
+  }));
+}
+
+function renderNswChart(el, weeks) {
+  if (!weeks.length) return empty(el, 'No NSW thoroughbred markets in this period.');
+  const cPos = css('--pos'), cNeg = css('--neg'), cOff = css('--muted');
+  const colorOf = w => w.turnover < 1000 ? cOff : w.generated_pct < NSW_GENERATED_MIN ? cNeg : cPos;
+  barChart(el, {
+    labels: weeks.map(w => shortDate(w.week)), aria: 'Commission generated as a share of NSW back turnover, by week, against the 1.25% line',
+    fmt: axisPct, ref: {value: NSW_GENERATED_MIN, label: '1.25%'},
+    groups: [{color: (_, i) => colorOf(weeks[i]), values: weeks.map(w => w.generated_pct)}],
+    tip: i => {
+      const w = weeks[i];
+      const charge = w.actual ? (w.charge ? '−' + money(w.charge) + ' charged' : 'not charged')
+        : w.in_progress ? `on pace for −${money(w.projected)}` : w.charge_est ? `est. −${money(w.charge_est)}` : 'not charged (est.)';
+      return tipHead(`Week of ${shortDate(w.week)}${w.in_progress ? ' (this week)' : ''}${w.partial ? ' (partial)' : ''}`) +
+        tipRow(swatch(colorOf(w)), 'generated', pct(w.generated_pct)) +
+        tipRow('', 'vs 1.25%', gapText(w), w.turnover >= 1000 ? pnlCls(nswGap(w)) : '') +
+        tipRow('', 'back turnover', money(w.turnover)) +
+        tipRow('', 'comm. paid', money(w.paid)) +
+        tipRow('', 'implied comm.', money(w.implied)) +
+        tipSub(`${w.markets} market${w.markets === 1 ? '' : 's'}${w.estimated ? ` (${w.estimated} by venue)` : ''} · ${charge}`);
+    },
+  });
+  setLegend('nsw-legend', [[swatch(cPos), 'Clear of 1.25%'], [swatch(cNeg), 'Below 1.25% (charged)'],
+    [swatch(cOff), 'Under $1k turnover'], [lineKey(css('--ink-2'), true), '1.25% line']]);
+  const done = weeks.filter(w => !w.in_progress), charged = done.filter(w => w.charged);
+  const now = weeks.find(w => w.in_progress);
+  setStats('nsw-stats', [
+    stat('Weeks charged', `${charged.length}/${done.length}`),
+    stat('Total charged', money(charged.reduce((a, w) => a + w.charge, 0))),
+    now && now.turnover && stat('This week', gapText(now), now.turnover >= 1000 ? pnlCls(nswGap(now)) : ''),
+  ]);
 }
 
 // ---------- tables ----------
-function table(cols, rows, empty) {
+// foot: an optional row (e.g. totals) shown under the body with the same columns
+function table(cols, rows, empty, foot) {
   if (!rows.length) return `<div class="empty">${empty}</div>`;
+  const tr = r => `<tr>${cols.map(c => `<td class="${c.num ? 'num ' : ''}${c.cls ? c.cls(r) : ''}">${c.f(r)}</td>`).join('')}</tr>`;
   return `<table><thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}">${c.h}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.num ? 'num ' : ''}${c.cls ? c.cls(r) : ''}">${c.f(r)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    <tbody>${rows.map(tr).join('')}</tbody>${foot ? `<tfoot>${tr(foot)}</tfoot>` : ''}</table>`;
 }
 const side = r => `<span class="pill ${r.side}">${r.side}</span>`;
 
+// matched stake per selection: weighted average price on each side, and what the
+// selection's matched bets return if it wins or loses (before commission)
+function matchedBySelection(orders) {
+  const groups = new Map();
+  for (const o of orders) {
+    if (!o.matched || !o.avg_matched) continue;
+    const k = o.market_id + ':' + o.selection_id;
+    let g = groups.get(k);
+    if (!g) groups.set(k, g = {start: o.start, event: o.event, market: o.market, runner: o.runner,
+      strategies: new Set(), orders: 0, BACK: {stake: 0, value: 0}, LAY: {stake: 0, value: 0}, win: 0, lose: 0});
+    const s = g[o.side];
+    s.stake += o.matched; s.value += o.matched * o.avg_matched;
+    const profit = o.matched * (o.avg_matched - 1);
+    if (o.side === 'BACK') { g.win += profit; g.lose -= o.matched; } else { g.win -= profit; g.lose += o.matched; }
+    if (o.strategy) g.strategies.add(o.strategy);
+    g.orders++;
+  }
+  return [...groups.values()].sort((a, b) => (a.start || '').localeCompare(b.start || '') || a.runner.localeCompare(b.runner));
+}
+const sideMatched = (g, sd) => g[sd].stake
+  ? `<span class="pill ${sd}">${sd}</span> ${money(g[sd].stake)} @ ${num(g[sd].value / g[sd].stake)}` : '';
+
 function renderOpen(d) {
-  if (!d.current) { document.getElementById('open-table').innerHTML = '<div class="empty">Waiting for Betfair…</div>'; return; }
-  const rows = d.current;
-  document.getElementById('open-count').textContent = rows.length ? rows.length + ' orders' : '';
+  const current = currentOrders(d);
+  if (!current) {
+    for (const id of ['matched-table', 'open-table']) document.getElementById(id).innerHTML = '<div class="empty">Waiting for Betfair…</div>';
+    return;
+  }
+  const groups = matchedBySelection(current), rows = current.filter(o => o.remaining > 0);
+  document.getElementById('open-count').textContent = current.length ? current.length + ' orders' : '';
+  document.getElementById('matched-table').innerHTML = table([
+    {h: 'Start', f: g => time(g.start)},
+    {h: 'Event', f: g => esc(g.event)},
+    {h: 'Market', f: g => esc(g.market)},
+    {h: 'Runner', f: g => esc(g.runner)},
+    {h: 'Orders', num: 1, f: g => g.orders},
+    {h: 'Matched (weighted price)', num: 1, f: g =>
+      `<div>${[sideMatched(g, 'BACK'), sideMatched(g, 'LAY')].filter(Boolean).join(' · ')}</div>
+       <div class="book">If wins <span class="${pnlCls(g.win)}">${signed(g.win)}</span> · if loses <span class="${pnlCls(g.lose)}">${signed(g.lose)}</span></div>`},
+    {h: 'Strategy', f: g => esc([...g.strategies].join(', '))},
+  ], groups, 'No matched bets.');
   document.getElementById('open-table').innerHTML = table([
     {h: 'Start', f: r => time(r.start)},
     {h: 'Event', f: r => esc(r.event)},
@@ -349,12 +709,14 @@ function renderOpen(d) {
     {h: 'Matched', num: 1, f: r => money(r.matched) + (r.avg_matched ? ' @ ' + num(r.avg_matched) : '')},
     {h: 'Unmatched', num: 1, f: r => money(r.remaining)},
     {h: 'Strategy', f: r => esc(r.strategy)},
-  ], rows, 'No open orders.');
+  ], rows, 'No unmatched orders.');
 }
 
 const stratNet = r => r.profit - r.commission - r.nsw_charge;
 function renderStrategies(d) {
   const rows = d.strategies || [];
+  const keys = ['bets', 'won', 'staked', 'profit', 'commission', 'nsw_charge'];
+  const total = rows.length > 1 ? Object.fromEntries([['strategy', 'Total'], ...keys.map(k => [k, rows.reduce((a, r) => a + r[k], 0)])]) : null;
   document.getElementById('strategy-table').innerHTML = table([
     {h: 'Strategy', f: r => esc(r.strategy)},
     {h: 'Bets', num: 1, f: r => r.bets},
@@ -363,10 +725,10 @@ function renderStrategies(d) {
     {h: 'Staked', num: 1, f: r => money(r.staked)},
     {h: 'Gross', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
     {h: 'Comm.', num: 1, f: r => r.commission ? '−' + money(r.commission) : '–'},
-    {h: 'NSW est.', num: 1, f: r => r.nsw_charge ? '−' + money(r.nsw_charge) : '–'},
+    {h: 'NSW', num: 1, f: r => r.nsw_charge ? '−' + money(r.nsw_charge) : '–'},
     {h: 'Net', num: 1, f: r => signed(stratNet(r)), cls: r => pnlCls(stratNet(r))},
     {h: 'POT', num: 1, f: r => r.staked ? (100 * stratNet(r) / r.staked).toFixed(1) + '%' : '–', cls: r => pnlCls(stratNet(r))},
-  ], rows, 'No settled bets in this period.');
+  ], rows, 'No settled bets in this period.', total);
 }
 
 function renderNsw(d) {
@@ -379,14 +741,19 @@ function renderNsw(d) {
     {h: 'Implied comm.', num: 1, f: r => money(r.implied)},
     {h: 'Generated', num: 1, f: r => pct(r.generated_pct)},
     {h: 'vs 1.25%', num: 1, f: gapText, cls: r => r.turnover >= 1000 ? pnlCls(nswGap(r)) : ''},
-    {h: 'Charged', f: r => r.charged ? 'Yes' : r.turnover < 1000 ? 'No (under $1k)' : 'No'},
-    {h: 'Charge', num: 1, f: r => r.charge ? '−' + money(r.charge) : '–', cls: r => r.charge ? 'neg' : ''},
+    {h: 'Charged', f: r => r.in_progress ? 'If ended now: ' + (r.charged ? 'Yes' : 'No') : r.charged ? 'Yes' : r.turnover < 1000 ? 'No (under $1k)' : 'No'},
+    {h: 'Estimate', num: 1, f: r => r.charge_est ? '−' + money(r.charge_est) : '–'},
+    {h: 'Betfair charged', num: 1, cls: r => r.actual && r.charge ? 'neg' : '',
+      f: r => r.actual ? (r.charge ? '−' + money(r.charge) : '$0.00')
+        : r.in_progress ? `on pace for −${money(r.projected)}` : 'not posted yet'},
   ], rows, 'No NSW thoroughbred markets in this period.');
   const u = n.unknown_venues || [];
   document.getElementById('nsw-note').textContent =
+    (STRATEGY ? `The table is for the whole account, since the charge is decided on all strategies’ bets together; ${STRATEGY}’s P&L carries its share, by its NSW back stake. ` : '') +
     'Charged when weekly NSW back turnover ≥ $1,000 and (commission paid + 3% of losing markets) ÷ 2 is under 1.25% of it; the charge is 3% of turnover. ' +
     '"vs 1.25%" is how far commission generated is above or below that line; a shortfall takes twice its size in extra commission paid to close, since only half of commission paid counts. ' +
-    'Only settled bets on this account are counted; the current week is provisional. ' +
+    'Only settled bets on this account are counted; the current week is provisional, and its "on pace" figure assumes the rest of the week matches it so far. ' +
+    'Once Betfair posts a week’s charge (usually the Tuesday after; read from the account statement) that amount replaces the estimate everywhere, including P&L. ' +
     'Markets are counted when Betfair flags them as Racing NSW Turnover Charge markets; ones that settled before the dashboard recorded the flag are matched by venue instead (est.), which can’t exclude NSW harness.' +
     (u.length ? ` Venues raced in AU hours that aren’t in venue_states.csv, so not counted: ${u.join(', ')}.` : '');
 }
@@ -394,27 +761,27 @@ function renderNsw(d) {
 async function renderSettled() {
   const q = document.getElementById('search').value;
   const s = document.getElementById('side-filter').value;
-  const range = RANGE;
+  const range = RANGE, strategy = STRATEGY;
   let res;
   try {
-    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}&days=${range}`, {cache: 'no-store'})).json();
+    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}&days=${range}&strategy=${encodeURIComponent(strategy)}`, {cache: 'no-store'})).json();
   } catch (e) { return; }
-  if (range !== RANGE) return;   // range changed while this was in flight
-  const shown = res.bets, pnl = res.profit;
+  if (range !== RANGE || strategy !== STRATEGY) return;   // filters changed while this was in flight
+  const shown = res.selections, pnl = res.profit;
   document.getElementById('settled-count').innerHTML =
-    `${res.count} bets · <span class="${pnlCls(pnl)}">${signed(pnl)}</span> gross${res.count > shown.length ? ` · showing latest ${shown.length}` : ''}`;
+    `${res.count} selections · ${res.bet_count} bets · <span class="${pnlCls(pnl)}">${signed(pnl)}</span> gross${res.count > shown.length ? ` · showing latest ${shown.length}` : ''}`;
+  const sideCell = (r, sd) => r[sd].stake ? `${money(r[sd].stake)} @ ${num(r[sd].price)}` : '–';
   document.getElementById('settled-table').innerHTML = table([
     {h: 'Settled', f: r => time(r.settled)},
     {h: 'Event', f: r => esc(r.event)},
     {h: 'Market', f: r => esc(r.market)},
     {h: 'Runner', f: r => esc(r.runner)},
-    {h: 'Side', f: side},
-    {h: 'Type', f: r => esc(r.order_type)},
-    {h: 'Price', num: 1, f: r => num(r.price)},
-    {h: 'Stake', num: 1, f: r => money(r.size)},
-    {h: 'Result', f: r => esc(r.outcome)},
+    {h: 'Result', f: r => r.result === 'WON' ? 'Won' : r.result === 'LOST' ? 'Lost' : '–'},
+    {h: 'Bets', num: 1, f: r => r.bets},
+    {h: 'Back (avg price)', num: 1, f: r => sideCell(r, 'BACK')},
+    {h: 'Lay (avg price)', num: 1, f: r => sideCell(r, 'LAY')},
     {h: 'Profit', num: 1, f: r => signed(r.profit), cls: r => pnlCls(r.profit)},
-    {h: 'Strategy', f: r => esc(r.strategy)},
+    {h: 'Strategy', f: r => esc(r.strategies.join(', '))},
   ], shown, 'No settled bets match.');
 }
 let searchT;
@@ -428,10 +795,10 @@ async function load() {
   const st = document.getElementById('status'), stText = document.getElementById('status-text');
   let next = REFRESH_MS;
   try {
-    const range = RANGE;
-    const res = await fetch(`api/data?days=${range}`, {cache: 'no-store'});
+    const range = RANGE, strategy = STRATEGY;
+    const res = await fetch(`api/data?days=${range}&strategy=${encodeURIComponent(strategy)}`, {cache: 'no-store'});
     const d = await res.json();
-    if (range !== RANGE) return;   // range changed while this was in flight
+    if (range !== RANGE || strategy !== STRATEGY) return;   // filters changed while this was in flight
     st.className = 'status meta ' + d.status;
     if (d.status === 'starting') { stText.textContent = 'Connecting to Betfair…'; next = STARTING_MS; }
     else stText.textContent = (d.status === 'ok' ? 'Live' : 'Stale') +
@@ -439,6 +806,7 @@ async function load() {
     document.getElementById('error').textContent = d.status === 'error' ? 'Last refresh failed: ' + d.error : '';
     // settled history comes from the server's database, so show it even before Betfair answers
     DATA = d;
+    fillStrategies(d);
     renderTiles(d); renderCharts(d); renderOpen(d); renderStrategies(d); renderNsw(d); renderSettled();
   } catch (e) {
     st.className = 'status meta error'; stText.textContent = 'Dashboard server unreachable';
