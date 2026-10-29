@@ -274,7 +274,7 @@ class Poller:
         log.info("Loaded %d bets, %d markets from %s", len(self._bets), len(self._markets), DB_PATH)
         # what requests read: (bets, markets, covered_from, transfers, charges), replaced whole after each fetch
         self._history: tuple = ()
-        self._views: dict[tuple, tuple[dict, list[dict]]] = {}   # (days, strategy) -> shaped history, until the next fetch
+        self._views: dict[tuple, tuple[dict, list[dict]]] = {}   # (days, strategies) -> shaped history, until the next fetch
         self._publish(self.store.meta("covered_from"))
         self._last_cleared = 0.0
         self._last_recheck = 0.0
@@ -542,17 +542,18 @@ class Poller:
                              list(self._transfers.values()), dict(self._charges))
             self._views = {}
 
-    def view(self, days: int, strategy: str = "") -> tuple[dict, list[dict]]:
-        """Settled history for the last `days` days (0 = everything held), for one strategy or
-        ("") all of them: summary and bets."""
+    def view(self, days: int, strategies: tuple[str, ...] = ()) -> tuple[dict, list[dict]]:
+        """Settled history for the last `days` days (0 = everything held), for some strategies or
+        (empty) all of them: summary and bets."""
+        strategies = tuple(sorted(set(strategies)))
         with self.lock:
-            if (days, strategy) not in self._views:
-                self._views[days, strategy] = self._shape_cleared(
-                    *self._history, days, strategy, datetime.now(timezone.utc))
-            return self._views[days, strategy]
+            if (days, strategies) not in self._views:
+                self._views[days, strategies] = self._shape_cleared(
+                    *self._history, days, strategies, datetime.now(timezone.utc))
+            return self._views[days, strategies]
 
     def _shape_cleared(self, bets: list[dict], markets: dict[str, dict], covered_from: datetime | None,
-                       transfers: list[dict], charges: dict[str, dict], days: int, strategy: str,
+                       transfers: list[dict], charges: dict[str, dict], days: int, strategies: tuple[str, ...],
                        now: datetime) -> tuple[dict, list[dict]]:
         bets, markets = _strategy_only(bets, markets)
         names = sorted({b["strategy"] for b in bets})
@@ -564,16 +565,32 @@ class Poller:
         # weekly NSW charge, decided on whole weeks whatever the range, then shown for weeks it overlaps
         weeks: dict[str, dict] = defaultdict(
             lambda: {"turnover": 0.0, "paid": 0.0, "implied": 0.0, "markets": 0, "estimated": 0})
+        # the same split per strategy, so each one's part adds up to the week's figures: commission
+        # paid split as in the strategy table, implied commission between the strategies that lost
+        # in the market, by how much each lost
+        week_strategies: dict[str, dict[str, dict]] = defaultdict(
+            lambda: defaultdict(lambda: {"turnover": 0.0, "paid": 0.0, "implied": 0.0}))
+        per_market = _per_market(bets)
         for k in nsw:
             m = markets[k]
-            w = weeks[_week(m["settled_utc"])]
+            wk = _week(m["settled_utc"])
+            w = weeks[wk]
             w["paid"] += m["commission"]
-            w["implied"] += max(0.0, -m["profit"]) * NSW_IMPLIED_RATE
+            w["implied"] += (implied := max(0.0, -m["profit"]) * NSW_IMPLIED_RATE)
             w["markets"] += 1
             w["estimated"] += not m["nsw_exact"]
+            per = per_market.get(k, {})
+            weights = _commission_weights(per)
+            total = sum(weights.values()) or 1.0
+            for s, wt in weights.items():
+                week_strategies[wk][s]["paid"] += m["commission"] * wt / total
+            losses = {s: -p for s, (p, _) in per.items() if p < 0}
+            for s, loss in losses.items():
+                week_strategies[wk][s]["implied"] += implied * loss / sum(losses.values())
         for b in bets:
             if b["market_id"] in nsw and b["side"] == "BACK":
-                weeks[_week(b["settled_utc"])]["turnover"] += b["size"] or 0.0
+                weeks[wk := _week(b["settled_utc"])]["turnover"] += b["size"] or 0.0
+                week_strategies[wk][b["strategy"]]["turnover"] += b["size"] or 0.0
         current_week = _week(now)
         week_rows = []
         week_start = datetime.fromisoformat(current_week).replace(tzinfo=timezone.utc)
@@ -600,13 +617,17 @@ class Poller:
                 # the first week can start before the earliest bets we were able to fetch
                 "partial": covered_from is not None
                            and datetime.fromisoformat(wk).replace(tzinfo=timezone.utc) < covered_from,
+                # each strategy's part; buffer = generated - 1.25% of turnover, so they add up to the week's
+                "strategies": {s: {**v, "generated": (g := (v["paid"] + v["implied"]) / 2),
+                                   "buffer": g - NSW_GENERATED_MIN * v["turnover"]}
+                               for s, v in sorted(week_strategies[wk].items())},
             })
         # each week's charge spread over its NSW back stake
         charge_rate = {w["week"]: w["charge"] / w["turnover"] for w in week_rows if w["turnover"]}
-        # the charge is decided on the whole account's week, so narrow to one strategy only now:
-        # it then carries its share of the charge, by its NSW back stake
-        if strategy:
-            bets, markets = _only(bets, markets, lambda s: s == strategy)
+        # the charge is decided on the whole account's week, so narrow to the chosen strategies only
+        # now: they then carry their share of the charge, by their NSW back stake
+        if strategies:
+            bets, markets = _only(bets, markets, lambda s: s in strategies)
         if start:
             week_rows = [w for w in week_rows
                          if datetime.fromisoformat(w["week"]).replace(tzinfo=timezone.utc) + timedelta(days=7) > start]
@@ -680,7 +701,7 @@ class Poller:
         won = sum(b["outcome"] == "WON" for b in bets)
         return {
             "range_days": days,
-            "strategy": strategy,
+            "strategy": list(strategies),
             "strategy_names": names,
             "since": start.date().isoformat() if start else daily_rows[0]["date"] if daily_rows else None,
             "daily": daily_rows,
@@ -755,18 +776,20 @@ def index():
 
 
 @app.get("/api/data")
-def data(days: int = Query(60, ge=0), strategy: str = ""):
+def data(days: int = Query(60, ge=0), strategy: list[str] = Query([])):
     """days: settled history to cover, counted back from today; 0 = everything held.
-    strategy: a customer_strategy_ref to narrow settled history to; empty = all strategies."""
+    strategy: customer_strategy_refs to narrow settled history to (repeat for several);
+    none = all strategies."""
     with poller.lock:
         snapshot = poller.snapshot
-    return JSONResponse({**snapshot, **poller.view(days, strategy)[0]})
+    return JSONResponse({**snapshot, **poller.view(days, tuple(strategy))[0]})
 
 
 @app.get("/api/bets")
-def bets(q: str = "", side: str = "", limit: int = 500, days: int = Query(60, ge=0), strategy: str = ""):
+def bets(q: str = "", side: str = "", limit: int = 500, days: int = Query(60, ge=0),
+         strategy: list[str] = Query([])):
     q = q.strip().lower()
-    rows = [b for b in poller.view(days, strategy)[1]
+    rows = [b for b in poller.view(days, tuple(strategy))[1]
             if (not side or b["side"] == side)
             and (not q or any(q in str(b[k] or "").lower() for k in ("runner", "event", "market", "strategy")))]
     sels = _by_selection(rows)

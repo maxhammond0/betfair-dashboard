@@ -101,6 +101,20 @@ button.theme { background: none; border: 1px solid var(--border); color: var(--i
 .section-row h2 { margin: 0; }
 input[type=search], select { background: var(--page); color: var(--ink); border: 1px solid var(--border);
   border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
+.strat { position: relative; }
+.strat > summary { list-style: none; cursor: pointer; background: var(--page); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 26px 4px 10px; font-size: 13px;
+  max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.strat > summary::-webkit-details-marker { display: none; }
+.strat > summary::after { content: "▾"; position: absolute; right: 9px; color: var(--muted); }
+.strat-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 220px;
+  max-width: min(320px, calc(100vw - 32px)); max-height: 360px; overflow-y: auto; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14); font-size: 13px; }
+.strat-menu label { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px;
+  cursor: pointer; white-space: nowrap; }
+.strat-menu label:hover { background: var(--hover); }
+.strat-menu label.all { border-bottom: 1px solid var(--grid); border-radius: 4px 4px 0 0; margin-bottom: 2px; }
 .table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--grid); }
@@ -126,7 +140,10 @@ td .book { color: var(--muted); font-size: 12px; margin-top: 2px; }
     <h1>Betfair Result Dashboard</h1>
     <span class="status meta" id="status"><span class="dot"></span><span id="status-text">Loading…</span></span>
     <span class="spacer"></span>
-    <select id="strategy" aria-label="Strategy"><option value="">All strategies</option></select>
+    <details class="strat" id="strategy">
+      <summary aria-label="Strategies">All strategies</summary>
+      <div class="strat-menu" role="group" aria-label="Strategies to show"></div>
+    </details>
     <div class="range" id="range" role="group" aria-label="Settled history range">
       <button data-days="1">Today</button><button data-days="7">7d</button><button data-days="30">30d</button><button data-days="60">60d</button><button data-days="90">90d</button><button data-days="0" title="Everything stored, including bets older than Betfair's 90 days">All</button>
     </div>
@@ -172,6 +189,19 @@ td .book { color: var(--muted); font-size: 12px; margin-top: 2px; }
       <div class="legend" id="nsw-legend"></div>
       <div class="chart" id="nsw-chart"></div>
       <div class="chart-stats" id="nsw-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>NSW buffer by strategy</h2><span class="meta">each strategy’s commission generated minus 1.25% of its NSW back turnover; they add up to the week’s buffer</span></div>
+      <div class="legend" id="nswstrat-legend"></div>
+      <div class="chart" id="nswstrat-chart"></div>
+      <div class="chart-stats" id="nswstrat-stats"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>NSW buffer with and without</h2>
+        <select id="nswone-strategy" aria-label="Strategy to take out of the NSW buffer"></select></div>
+      <div class="legend" id="nswone-legend"></div>
+      <div class="chart" id="nswone-chart"></div>
+      <div class="chart-stats" id="nswone-stats"></div>
     </div>
   </section>
   <div style="height:16px"></div>
@@ -222,26 +252,45 @@ rangeBtns.forEach(b => b.onclick = () => {
 });
 markRange();
 
-// ---------- strategy filter (remembered per browser) ----------
-let STRATEGY = '';
-try { STRATEGY = localStorage.getItem('strategy') || ''; } catch (e) {}
-const stratSel = document.getElementById('strategy');
-stratSel.onchange = () => {
-  STRATEGY = stratSel.value;
-  try { localStorage.setItem('strategy', STRATEGY); } catch (e) {}
-  load();
+// ---------- strategy filter (remembered per browser); none chosen = all ----------
+let STRATEGIES = [];
+try {
+  const v = localStorage.getItem('strategies');
+  if (v) STRATEGIES = JSON.parse(v);
+  else if (localStorage.getItem('strategy')) STRATEGIES = [localStorage.getItem('strategy')];   // the old single choice
+} catch (e) {}
+const stratKey = () => STRATEGIES.join('\n');
+const stratQuery = () => STRATEGIES.map(s => '&strategy=' + encodeURIComponent(s)).join('');
+const stratLabel = () => !STRATEGIES.length ? 'All strategies'
+  : STRATEGIES.length <= 2 ? STRATEGIES.join(', ') : `${STRATEGIES.length} strategies`;
+const stratBox = document.getElementById('strategy');
+const stratMenu = stratBox.querySelector('.strat-menu');
+// reload a moment after the last tick, so ticking several boxes makes one request
+let stratT;
+stratMenu.onchange = e => {
+  const boxes = [...stratMenu.querySelectorAll('input[data-name]')];
+  if (e.target.dataset.name == null) boxes.forEach(b => b.checked = false);   // "All strategies"
+  STRATEGIES = boxes.filter(b => b.checked).map(b => b.dataset.name).sort();
+  stratMenu.querySelector('input.all').checked = !STRATEGIES.length;
+  stratBox.querySelector('summary').textContent = stratLabel();
+  try { localStorage.setItem('strategies', JSON.stringify(STRATEGIES)); } catch (e) {}
+  clearTimeout(stratT); stratT = setTimeout(load, 300);
 };
-// every strategy seen in settled history or open orders, plus the chosen one even if it has neither
+document.addEventListener('click', e => { if (stratBox.open && !stratBox.contains(e.target)) stratBox.open = false; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && stratBox.open) { stratBox.open = false; stratBox.querySelector('summary').focus(); } });
+// every strategy seen in settled history or open orders, plus the chosen ones even if they have neither
 function fillStrategies(d) {
-  const names = new Set([...(d.strategy_names || []), ...(d.current || []).map(o => o.strategy).filter(Boolean)]);
-  if (STRATEGY) names.add(STRATEGY);
-  const opts = ['', ...[...names].sort()];
-  if (opts.join('\n') !== [...stratSel.options].map(o => o.value).join('\n'))
-    stratSel.innerHTML = opts.map(v => `<option value="${esc(v)}">${v ? esc(v) : 'All strategies'}</option>`).join('');
-  stratSel.value = STRATEGY;
+  const names = new Set([...(d.strategy_names || []), ...(d.current || []).map(o => o.strategy).filter(Boolean), ...STRATEGIES]);
+  const opts = [...names].sort();
+  if (opts.join('\n') !== [...stratMenu.querySelectorAll('input[data-name]')].map(b => b.dataset.name).join('\n'))
+    stratMenu.innerHTML = '<label class="all"><input type="checkbox" class="all"> All strategies</label>' +
+      opts.map(v => `<label><input type="checkbox" data-name="${esc(v)}"> ${esc(v)}</label>`).join('');
+  stratMenu.querySelector('input.all').checked = !STRATEGIES.length;
+  stratMenu.querySelectorAll('input[data-name]').forEach(b => b.checked = STRATEGIES.includes(b.dataset.name));
+  stratBox.querySelector('summary').textContent = stratLabel();
 }
-// open orders narrowed to the chosen strategy (settled history is narrowed by the server)
-const currentOrders = d => d.current && (STRATEGY ? d.current.filter(o => o.strategy === STRATEGY) : d.current);
+// open orders narrowed to the chosen strategies (settled history is narrowed by the server)
+const currentOrders = d => d.current && (STRATEGIES.length ? d.current.filter(o => STRATEGIES.includes(o.strategy)) : d.current);
 
 // ---------- theme toggle (per-viewer convenience only) ----------
 const root = document.documentElement;
@@ -289,7 +338,7 @@ function renderTiles(d) {
   const tiles = [
     ['Available to bet', money(f.available), ''],
     ['Exposure', money(f.exposure), f.exposure_limit != null ? 'limit ' + money(f.exposure_limit) : ''],
-    [STRATEGY ? 'Open orders (strategy)' : 'Open orders', d.current ? open.length : '–', d.current ? unmatched + ' with unmatched stake' : ''],
+    [STRATEGIES.length ? `Open orders (${STRATEGIES.length > 1 ? 'strategies' : 'strategy'})` : 'Open orders', d.current ? open.length : '–', d.current ? unmatched + ' with unmatched stake' : ''],
     ['Today net P&L', signed(t ? t.net : 0), t ? t.markets + ' markets settled' : 'nothing settled yet', t ? t.net : 0],
     [d.range_days === 1 ? 'Net P&L today' : d.since ? `Net P&L since ${shortDate(d.since)}` : 'Net P&L', signed(total), `commission ${money(comm)} · NSW ${money(nswTotal)}`, total],
     ['NSW charge this week (est.)', wk ? money(wk.charge) : money(0),
@@ -423,8 +472,8 @@ function lineChart(el, {labels, series, tip, fmt, aria, endLabels = false, annot
 }
 
 // a bar rounded at its data end only, square at the zero baseline
-function barPath(x0, bw, v, y) {
-  const top = Math.min(y(v), y(0)), h = Math.max(1, Math.abs(y(v) - y(0))), r = Math.min(4, bw / 2, h), x1 = x0 + bw;
+function barPath(x0, bw, v, y, base = 0, round = true) {
+  const top = Math.min(y(base + v), y(base)), h = Math.max(1, Math.abs(y(base + v) - y(base))), r = round ? Math.min(4, bw / 2, h) : 0, x1 = x0 + bw;
   return v >= 0
     ? `M${x0},${top + h}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x1 - r}Q${x1},${top} ${x1},${top + r}V${top + h}Z`
     : `M${x0},${top}V${top + h - r}Q${x0},${top + h} ${x0 + r},${top + h}H${x1 - r}Q${x1},${top + h} ${x1},${top + h - r}V${top}Z`;
@@ -458,8 +507,8 @@ const empty = (el, msg) => el.innerHTML = `<div class="empty">${msg}</div>`;
 
 function renderCharts(d) {
   const days = d.daily || [];
-  const els = Object.fromEntries(['cum', 'daily', 'dd', 'strat', 'odds', 'nsw'].map(k => [k, document.getElementById(k + '-chart')]));
-  for (const k of ['cum', 'daily', 'dd', 'strat', 'odds', 'nsw']) { setLegend(k + '-legend', []); setStats(k + '-stats', []); }
+  const els = Object.fromEntries(['cum', 'daily', 'dd', 'strat', 'odds', 'nsw', 'nswstrat', 'nswone'].map(k => [k, document.getElementById(k + '-chart')]));
+  for (const k of Object.keys(els)) { setLegend(k + '-legend', []); setStats(k + '-stats', []); }
   if (!days.length) {
     for (const k of ['cum', 'daily', 'dd', 'strat', 'odds']) empty(els[k], 'No settled markets in this period.');
   } else {
@@ -470,6 +519,8 @@ function renderCharts(d) {
     renderOdds(els.odds, d.odds || []);
   }
   renderNswChart(els.nsw, (d.nsw || {}).weeks || []);
+  renderNswStrategies(els.nswstrat, d);
+  renderNswWithout(els.nswone, d);
 }
 
 function dayTip(day) {
@@ -642,6 +693,129 @@ function renderNswChart(el, weeks) {
   ]);
 }
 
+// colour follows the strategy's place among all strategies (as in the by-strategy chart); past eight, "Other"
+function strategyColours(d) {
+  const all = d.strategy_names || [], fold = all.length > 8;
+  const keyOf = s => { const i = all.indexOf(s); return fold && (i < 0 || i >= 7) ? 'Other' : s; };
+  const colour = k => k === 'Other' || all.indexOf(k) < 0 ? css('--muted') : slot(all.indexOf(k));
+  const order = (a, b) => (a === 'Other') - (b === 'Other') || all.indexOf(a) - all.indexOf(b);
+  return {keyOf, colour, order};
+}
+
+// each week's buffer as a stack of strategy parts: gains above zero, drags below, the week's total marked
+function renderNswStrategies(el, d) {
+  const weeks = ((d.nsw || {}).weeks || []).filter(w => w.turnover || w.markets);
+  if (!weeks.length) return empty(el, 'No NSW thoroughbred markets in this period.');
+  const {keyOf, colour, order} = strategyColours(d);
+  const parts = weeks.map(w => {
+    const m = {};
+    for (const [s, v] of Object.entries(w.strategies || {})) {
+      const k = keyOf(s), p = m[k] ||= {buffer: 0, generated: 0, turnover: 0, paid: 0, implied: 0};
+      for (const f of Object.keys(p)) p[f] += v[f];
+    }
+    return m;
+  });
+  const keys = [...new Set(parts.flatMap(Object.keys))].sort(order);
+  const totals = weeks.map(w => w.generated - NSW_GENERATED_MIN * w.turnover);
+  const ups = parts.map(p => keys.reduce((a, k) => a + Math.max(0, p[k]?.buffer || 0), 0));
+  const downs = parts.map(p => keys.reduce((a, k) => a + Math.min(0, p[k]?.buffer || 0), 0));
+  const {W, H, m, y, g} = frame(el, [...ups, ...downs]);
+  const n = weeks.length, band = (W - m.l - m.r) / n, bw = Math.max(4, Math.min(28, band - Math.max(2, band * 0.25)));
+  const x = i => m.l + band * (i + 0.5);
+  let marks = '';
+  parts.forEach((p, i) => {
+    // stack outward from zero with a 2px surface gap; only the outermost segment is rounded
+    for (const sign of [1, -1]) {
+      const segs = keys.filter(k => p[k] && Math.sign(p[k].buffer) === sign && Math.abs(p[k].buffer) > 0.005);
+      let base = 0;
+      segs.forEach((k, j) => {
+        const v = p[k].buffer;
+        marks += `<path class="bar" data-i="${i}" d="${barPath(x(i) - bw / 2, bw, v, y, base, j === segs.length - 1)}" fill="${colour(k)}" stroke="${css('--surface')}" stroke-width="2"/>`;
+        base += v;
+      });
+    }
+    marks += `<line class="bar" data-i="${i}" x1="${x(i) - bw / 2 - 4}" x2="${x(i) + bw / 2 + 4}" y1="${y(totals[i])}" y2="${y(totals[i])}" stroke="${css('--ink')}" stroke-width="2" stroke-linecap="round"/>`;
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Each strategy's part of the weekly NSW commission buffer">
+    ${g}${marks}${xLabels(n, x, W, H, m, i => shortDate(weeks[i].week), false, true)}</svg><div class="tip"></div>`;
+  const barEls = el.querySelectorAll('.bar');
+  attachHover(el, n, x, i => {
+    const w = weeks[i];
+    return tipHead(`Week of ${shortDate(w.week)}${w.in_progress ? ' (this week)' : ''}`) +
+      tipRow(lineKey(css('--ink')), 'week’s buffer', signed(totals[i]), w.turnover >= 1000 ? pnlCls(totals[i]) : '') +
+      keys.filter(k => parts[i][k]).sort((a, b) => parts[i][b].buffer - parts[i][a].buffer).map(k => {
+        const v = parts[i][k];
+        return tipRow(swatch(colour(k)), k, signed(v.buffer), pnlCls(v.buffer)) +
+          tipSub(`generated ${money(v.generated)} on ${money(v.turnover)} back turnover`);
+      }).join('') +
+      tipSub(w.turnover < 1000 ? 'Under $1k turnover: no charge either way' : w.charged ? `Charged ${money(w.charge)}` : 'Not charged');
+  }, i => barEls.forEach(b => b.style.opacity = i == null || +b.dataset.i === i ? 1 : 0.45));
+  setLegend('nswstrat-legend', [...keys.map(k => [swatch(colour(k)), k]), [lineKey(css('--ink')), 'Week’s buffer']]);
+  setStats('nswstrat-stats', keys.map(k => {
+    const t = parts.reduce((a, p) => a + (p[k]?.buffer || 0), 0);
+    return stat(trunc(k, 20), signed(t), pnlCls(t));
+  }));
+}
+
+// the week as it was, against the same week with one strategy's bets taken out
+let NSW_ONE = null;
+try { NSW_ONE = localStorage.getItem('nswOne'); } catch (e) {}
+document.getElementById('nswone-strategy').onchange = e => {
+  NSW_ONE = e.target.value;
+  try { localStorage.setItem('nswOne', NSW_ONE); } catch (e) {}
+  if (DATA) renderCharts(DATA);
+};
+const nswCharge = (turnover, buffer) => turnover >= 1000 && buffer < 0 ? turnover * 0.03 : 0;
+
+function renderNswWithout(el, d) {
+  const weeks = ((d.nsw || {}).weeks || []).filter(w => w.turnover || w.markets);
+  const names = [...new Set(weeks.flatMap(w => Object.keys(w.strategies || {})))].sort();
+  const sel = document.getElementById('nswone-strategy');
+  if (!names.length) { sel.innerHTML = ''; return empty(el, 'No NSW thoroughbred markets in this period.'); }
+  // default to a drifter strategy, else one with NSW in its name, else the biggest contributor
+  const size = s => weeks.reduce((a, w) => a + Math.abs(w.strategies?.[s]?.buffer || 0), 0);
+  const pick = names.includes(NSW_ONE) ? NSW_ONE : names.find(s => /drift/i.test(s)) || names.find(s => /nsw/i.test(s))
+    || [...names].sort((a, b) => size(b) - size(a))[0];
+  if ([...sel.options].map(o => o.value).join('\n') !== names.join('\n'))
+    sel.innerHTML = names.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  sel.value = pick;
+  const rows = weeks.map(w => {
+    const p = w.strategies?.[pick] || {buffer: 0, generated: 0, turnover: 0, paid: 0, implied: 0};
+    const buffer = w.generated - NSW_GENERATED_MIN * w.turnover, turnover = w.turnover - p.turnover;
+    const without = buffer - p.buffer;
+    // a week Betfair has posted uses the posted charge; the rest are estimates either way
+    const charge = w.in_progress ? nswCharge(w.turnover, buffer) : w.charge;
+    return {w, p, buffer, without, turnover, charge, chargeWithout: nswCharge(turnover, without)};
+  });
+  const cWith = css('--series'), cWithout = css('--muted');
+  barChart(el, {
+    labels: weeks.map(w => shortDate(w.week)), aria: `Weekly NSW buffer with and without ${pick}`,
+    groups: [{color: () => cWith, values: rows.map(r => r.buffer)}, {color: () => cWithout, values: rows.map(r => r.without)}],
+    tip: i => {
+      const r = rows[i], saved = r.chargeWithout - r.charge;
+      return tipHead(`Week of ${shortDate(r.w.week)}${r.w.in_progress ? ' (this week)' : ''}`) +
+        tipRow(swatch(cWith), 'buffer', signed(r.buffer), r.w.turnover >= 1000 ? pnlCls(r.buffer) : '') +
+        tipRow(swatch(cWithout), `without ${pick}`, signed(r.without), r.turnover >= 1000 ? pnlCls(r.without) : '') +
+        tipRow('', `${pick}’s part`, signed(r.p.buffer), pnlCls(r.p.buffer)) +
+        tipSub(`${pick}: paid ${money(r.p.paid)} + implied ${money(r.p.implied)}, ÷ 2 = ${money(r.p.generated)} generated, ` +
+          `less 1.25% of its ${money(r.p.turnover)} back turnover`) +
+        tipSub(`Charge ${money(r.charge)}${r.w.in_progress ? ' if the week ended now' : ''}; without it ${money(r.chargeWithout)}` +
+          (Math.abs(saved) > 0.005 ? ` · <span class="${pnlCls(saved)}">${saved > 0 ? 'saved' : 'cost'} ${money(Math.abs(saved))}</span>` : ''));
+    },
+  });
+  setLegend('nswone-legend', [[swatch(cWith), 'Buffer'], [swatch(cWithout), `Without ${pick}`]]);
+  const part = rows.reduce((a, r) => a + r.p.buffer, 0);
+  const saved = rows.reduce((a, r) => a + r.chargeWithout - r.charge, 0);
+  const flipped = rows.filter(r => (r.chargeWithout > 0) !== (r.charge > 0)).length;
+  setStats('nswone-stats', [
+    stat(`${trunc(pick, 20)}’s part of the buffer`, signed(part), pnlCls(part)),
+    stat('Generated', money(rows.reduce((a, r) => a + r.p.generated, 0))),
+    stat('Its back turnover', money(rows.reduce((a, r) => a + r.p.turnover, 0))),
+    stat(saved >= 0 ? 'Charges saved' : 'Charges added', money(Math.abs(saved)), pnlCls(saved)),
+    stat('Weeks it decided', `${flipped}/${rows.length}`),
+  ]);
+}
+
 // ---------- tables ----------
 // foot: an optional row (e.g. totals) shown under the body with the same columns
 function table(cols, rows, empty, foot) {
@@ -745,7 +919,7 @@ function renderNsw(d) {
   ], rows, 'No NSW thoroughbred markets in this period.');
   const u = n.unknown_venues || [];
   document.getElementById('nsw-note').textContent =
-    (STRATEGY ? `The table is for the whole account, since the charge is decided on all strategies’ bets together; ${STRATEGY}’s P&L carries its share, by its NSW back stake. ` : '') +
+    (STRATEGIES.length ? `The table is for the whole account, since the charge is decided on all strategies’ bets together; the P&L for ${STRATEGIES.join(', ')} carries ${STRATEGIES.length > 1 ? 'their' : 'its'} share, by NSW back stake. ` : '') +
     'Charged when weekly NSW back turnover ≥ $1,000 and (commission paid + 3% of losing markets) ÷ 2 is under 1.25% of it; the charge is 3% of turnover. ' +
     '"vs 1.25%" is how far commission generated is above or below that line; a shortfall takes twice its size in extra commission paid to close, since only half of commission paid counts. ' +
     'Only settled bets on this account are counted; the current week is provisional, and its "on pace" figure assumes the rest of the week matches it so far. ' +
@@ -757,12 +931,12 @@ function renderNsw(d) {
 async function renderSettled() {
   const q = document.getElementById('search').value;
   const s = document.getElementById('side-filter').value;
-  const range = RANGE, strategy = STRATEGY;
+  const range = RANGE, strategy = stratKey();
   let res;
   try {
-    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}&days=${range}&strategy=${encodeURIComponent(strategy)}`, {cache: 'no-store'})).json();
+    res = await (await fetch(`api/bets?q=${encodeURIComponent(q)}&side=${s}&days=${range}${stratQuery()}`, {cache: 'no-store'})).json();
   } catch (e) { return; }
-  if (range !== RANGE || strategy !== STRATEGY) return;   // filters changed while this was in flight
+  if (range !== RANGE || strategy !== stratKey()) return;   // filters changed while this was in flight
   const shown = res.selections, pnl = res.profit;
   document.getElementById('settled-count').innerHTML =
     `${res.count} selections · ${res.bet_count} bets · <span class="${pnlCls(pnl)}">${signed(pnl)}</span> gross${res.count > shown.length ? ` · showing latest ${shown.length}` : ''}`;
@@ -791,10 +965,10 @@ async function load() {
   const st = document.getElementById('status'), stText = document.getElementById('status-text');
   let next = REFRESH_MS;
   try {
-    const range = RANGE, strategy = STRATEGY;
-    const res = await fetch(`api/data?days=${range}&strategy=${encodeURIComponent(strategy)}`, {cache: 'no-store'});
+    const range = RANGE, strategy = stratKey();
+    const res = await fetch(`api/data?days=${range}${stratQuery()}`, {cache: 'no-store'});
     const d = await res.json();
-    if (range !== RANGE || strategy !== STRATEGY) return;   // filters changed while this was in flight
+    if (range !== RANGE || strategy !== stratKey()) return;   // filters changed while this was in flight
     st.className = 'status meta ' + d.status;
     if (d.status === 'starting') { stText.textContent = 'Connecting to Betfair…'; next = STARTING_MS; }
     else stText.textContent = (d.status === 'ok' ? 'Live' : 'Stale') +

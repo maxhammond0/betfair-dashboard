@@ -3,8 +3,9 @@
 Read-only web dashboard for the Betfair account: balance and exposure, open
 orders, settled bets, daily and cumulative P&L (net and gross), drawdown, P&L by
 `customer_strategy_ref` (table and cumulative chart), gross P&L and strike rate by
-matched price band, and an estimate of the NSW turnover charge with a weekly
-commission-generated chart.
+matched price band, and an estimate of the NSW turnover charge with weekly charts of
+commission generated, each strategy's part of the 1.25% buffer, and the buffer with
+and without a chosen strategy.
 
 It only calls read endpoints (account funds, current orders, cleared orders,
 market catalogue), so it cannot place, cancel or change bets. It logs in with
@@ -31,12 +32,13 @@ The buttons at the top of the page pick how much settled history the P&L,
 strategy, NSW and settled-bet sections cover (today, 7/30/60/90 days, or
 everything stored). The choice is remembered per browser.
 
-The strategy menu next to them narrows the page to one `customer_strategy_ref`:
-P&L tiles and charts, strike rate, open orders and settled selections then cover
-only that strategy's bets, with each market's commission cut to its share (as in
-the strategy table). Balance, exposure, transfers and the NSW weekly table stay
+The strategy menu next to them narrows the page to one or more
+`customer_strategy_ref`s (tick any number; none ticked means all): P&L tiles and
+charts, strike rate, open orders and settled selections then cover only those
+strategies' bets, with each market's commission cut to their share (as in the
+strategy table). Balance, exposure, transfers and the NSW weekly table stay
 account-wide, since the NSW charge is decided on all strategies together; the
-strategy's P&L carries its share of the charge, by its NSW back stake.
+chosen strategies' P&L carries their share of the charge, by NSW back stake.
 
 The delayed app key works: account and order data aren't delayed.
 
