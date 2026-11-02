@@ -30,7 +30,9 @@ past Betfair's 90 days.
 
 The buttons at the top of the page pick how much settled history the P&L,
 strategy, NSW and settled-bet sections cover (today, 7/30/60/90 days, or
-everything stored). The choice is remembered per browser.
+everything stored). The choice is remembered per browser. Days are counted in
+`DASH_TZ`, except that UK and Irish markets count on the day it was there, so a
+UK evening meeting that settles after midnight in Sydney stays on the UK's day.
 
 The strategy menu next to them narrows the page to one or more
 `customer_strategy_ref`s (tick any number; none ticked means all): P&L tiles and
@@ -52,7 +54,7 @@ the LAN or put it behind your reverse proxy's auth.
 | `DASH_CURRENT_POLL_S` | 15 | funds and open-orders refresh |
 | `DASH_CLEARED_POLL_S` | 120 | fetch newly settled bets (the last 3 days are re-pulled every 6 hours, for corrections) |
 | `DASH_DB` | `data/dashboard.db` | SQLite file holding settled bets |
-| `DASH_TZ` | Australia/Sydney | timezone for daily P&L buckets |
+| `DASH_TZ` | Australia/Sydney | timezone for daily P&L buckets (UK and Irish markets count on their own local day) |
 | `DASH_VENUE_STATES` | `venue_states.csv` | venue → state map used to find NSW markets |
 
 ## Notes

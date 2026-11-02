@@ -67,6 +67,12 @@ SCAN_AHEAD = timedelta(hours=24)
 # "12:35" is the start in the account's timezone (DASH_TZ), used when the start time is missing.
 EVENT_TIME = re.compile(r"^(\d{1,2}):(\d{2})\s+")
 AU_HOURS_UTC = (21, 11)
+# P&L is counted on the day it was in the venue's timezone, so a UK evening meeting that
+# settles after midnight in DASH_TZ still lands on the UK's day. AU stays on DASH_TZ. Markets
+# whose country wasn't recorded are horse racing outside AU hours: in practice UK and Ireland.
+COUNTRY_TZ = {"GB": ZoneInfo("Europe/London"), "IE": ZoneInfo("Europe/Dublin"),
+              "FR": ZoneInfo("Europe/Paris"), "ZA": ZoneInfo("Africa/Johannesburg")}
+OVERSEAS_TZ = ZoneInfo("Europe/London")
 # The charge actually debited: an account statement item like "AUS Turnover Chg ADJ77 - wk
 # start 12-Oct-26", posted a day or two after the week. It only comes with include_item=ALL,
 # among every bet settlement, so just the few days after each week are read.
@@ -96,6 +102,10 @@ def _utc(dt: datetime | None) -> datetime | None:
 def _iso(dt: datetime | None) -> str | None:
     dt = _utc(dt)
     return dt.astimezone(TZ).isoformat() if dt else None
+
+
+def _day(dt: datetime, tz: ZoneInfo = TZ) -> str:
+    return dt.astimezone(tz).date().isoformat()
 
 
 def _week(dt: datetime) -> str:
@@ -461,19 +471,24 @@ class Poller:
     def _classify(self, market_id: str, m: dict) -> None:
         """Set m["nsw"] (a Racing NSW turnover charge market?) and m["nsw_exact"] (from Betfair's
         flag, or else guessed from the venue). m["state"] is the guessed AU state, 'UNKNOWN' for
-        an unmapped venue raced in AU hours, None if not guessed."""
+        an unmapped venue raced in AU hours, None if not guessed. m["day"] is the date it settled
+        in the venue's timezone."""
         info = self._market_info.get(market_id)
         m["venue"] = (info and info["venue"]) or EVENT_TIME.sub("", m["event"] or "")
         m["state"] = None
-        if info is not None:
-            m["nsw"], m["nsw_exact"] = bool(info["rnsw"]), True
-            return
-        m["nsw"] = m["nsw_exact"] = False
+        m["day"] = _day(m["settled_utc"], COUNTRY_TZ.get(info and info["country"], TZ))
         start = m.get("start_utc")
         if start is None and (t := EVENT_TIME.match(m["event"] or "")):
             local = datetime.combine(m["settled_utc"].astimezone(TZ).date(), dtime(int(t[1]), int(t[2])), TZ)
             start = local.astimezone(timezone.utc)   # the date may be off by one; only the hour is used
-        if m["event_type_id"] != HORSE_RACING or start is None or AU_HOURS_UTC[1] <= start.hour < AU_HOURS_UTC[0]:
+        au_hours = start is not None and not AU_HOURS_UTC[1] <= start.hour < AU_HOURS_UTC[0]
+        if not (info and info["country"]) and m["event_type_id"] == HORSE_RACING and start is not None and not au_hours:
+            m["day"] = _day(m["settled_utc"], OVERSEAS_TZ)
+        if info is not None:
+            m["nsw"], m["nsw_exact"] = bool(info["rnsw"]), True
+            return
+        m["nsw"] = m["nsw_exact"] = False
+        if m["event_type_id"] != HORSE_RACING or not au_hours:
             return   # not horse racing, or not raced in AU hours (or can't tell)
         # can't exclude NSW harness here: settled orders don't say Pace/Trot
         m["state"] = self.venue_states.get(_norm(m["venue"]), "UNKNOWN")
@@ -628,11 +643,15 @@ class Poller:
         # now: they then carry their share of the charge, by their NSW back stake
         if strategies:
             bets, markets = _only(bets, markets, lambda s: s in strategies)
+        # a bet counts on its market's day (see _classify)
+        def day_of(b: dict) -> str:
+            return m["day"] if (m := markets.get(b["market_id"])) else _day(b["settled_utc"])
+
         if start:
             week_rows = [w for w in week_rows
                          if datetime.fromisoformat(w["week"]).replace(tzinfo=timezone.utc) + timedelta(days=7) > start]
-            markets = {k: m for k, m in markets.items() if m["settled_utc"] >= start}
-            bets = [b for b in bets if b["settled_utc"] >= start]
+            markets = {k: m for k, m in markets.items() if m["day"] >= start.date().isoformat()}
+            bets = [b for b in bets if day_of(b) >= start.date().isoformat()]
             transfers = [t for t in transfers if t["item_utc"] >= start]
 
         def nsw_charge(b: dict) -> float:
@@ -643,13 +662,13 @@ class Poller:
         # daily P&L: market profit - commission - NSW charge (allocated by back stake)
         daily: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "commission": 0.0, "nsw_charge": 0.0, "markets": 0})
         for m in markets.values():
-            day = daily[m["settled_utc"].astimezone(TZ).date().isoformat()]
+            day = daily[m["day"]]
             day["gross"] += m["profit"]
             day["commission"] += m["commission"]
             day["markets"] += 1
         for b in bets:
             if c := nsw_charge(b):
-                daily[b["settled_utc"].astimezone(TZ).date().isoformat()]["nsw_charge"] += c
+                daily[day_of(b)]["nsw_charge"] += c
         daily_rows = [{"date": k, **v, "net": v["gross"] - v["commission"] - v["nsw_charge"]}
                       for k, v in sorted(daily.items())]
 
@@ -660,7 +679,7 @@ class Poller:
         for k, per in _per_market(bets).items():
             if not (m := markets.get(k)) or not m["commission"]:
                 continue
-            day = m["settled_utc"].astimezone(TZ).date().isoformat()
+            day = m["day"]
             weights = _commission_weights(per)
             total = sum(weights.values()) or 1.0
             for s, w in weights.items():
@@ -674,7 +693,7 @@ class Poller:
             s["staked"] += b["size"] or 0.0
             s["profit"] += b["profit"] or 0.0
             s["nsw_charge"] += (c := nsw_charge(b))
-            strategy_days[b["strategy"]][b["settled_utc"].astimezone(TZ).date().isoformat()] += (b["profit"] or 0.0) - c
+            strategy_days[b["strategy"]][day_of(b)] += (b["profit"] or 0.0) - c
         strategies = [{"strategy": k, **v} for k, v in sorted(by_strategy.items())]
 
         # gross P&L by matched price and side (commission is per market, so can't be split by price)
